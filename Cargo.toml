@@ -1,0 +1,24 @@
+[package]
+name = "lua-protobuf-rs"
+version = "0.1.0"
+edition = "2021"
+authors = ["mikai233"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = ["lua54"]
+lua54 = ["mlua/lua54"]
+lua53 = ["mlua/lua53"]
+lua52 = ["mlua/lua52"]
+lua51 = ["mlua/lua51"]
+luajit = ["mlua/luajit"]
+
+[dependencies]
+mlua = { version = "0.9.1", features = ["module"] }
+anyhow = "1.0.71"
+walkdir = "2.3.3"
+protobuf = "3.2.0"
+protobuf-parse = "3.2.0"
+protoc-bin-vendored = "3.0.0"
