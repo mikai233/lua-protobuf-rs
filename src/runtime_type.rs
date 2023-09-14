@@ -2,7 +2,8 @@ use std::ops::{Deref, DerefMut};
 use mlua::prelude::LuaUserData;
 use mlua::UserDataFields;
 use protobuf::reflect::RuntimeType;
-use crate::descriptor::{LuaEnumDescriptor, LuaMessageDescriptor};
+use crate::descriptor::enum_descriptor::LuaEnumDescriptor;
+use crate::descriptor::message_descriptor::LuaMessageDescriptor;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct LuaRuntimeType(RuntimeType);

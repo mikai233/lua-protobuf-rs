@@ -3,7 +3,7 @@ use mlua::prelude::LuaUserData;
 use mlua::UserDataMethods;
 use protobuf::descriptor::FieldDescriptorProto;
 use protobuf::MessageDyn;
-use crate::descriptor::LuaMessageDescriptor;
+use crate::descriptor::message_descriptor::LuaMessageDescriptor;
 
 #[derive(PartialEq, Clone, Default, Debug)]
 pub struct LuaFieldDescriptorProto(FieldDescriptorProto);

@@ -4,9 +4,11 @@ use anyhow::{anyhow, Context};
 use mlua::prelude::LuaUserData;
 use mlua::{ExternalError, Lua, Table, UserDataMethods};
 use protobuf::MessageDyn;
-use protobuf::reflect::{EnumDescriptor, FileDescriptor, MessageDescriptor};
+use protobuf::reflect::FileDescriptor;
 use crate::codec::LuaProtoCodec;
-use crate::descriptor::{LuaEnumDescriptor, LuaFileDescriptor, LuaMessageDescriptor};
+use crate::descriptor::enum_descriptor::LuaEnumDescriptor;
+use crate::descriptor::file_descriptor::LuaFileDescriptor;
+use crate::descriptor::message_descriptor::LuaMessageDescriptor;
 
 #[derive(Default)]
 pub struct LuaProtoc {

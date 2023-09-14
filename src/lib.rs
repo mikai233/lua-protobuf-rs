@@ -5,10 +5,10 @@ use crate::protoc::LuaProtoc;
 
 pub mod codec;
 pub mod protoc;
-pub mod descriptor;
 pub mod field_descriptor_proto;
 pub mod runtime_type;
 pub mod runtime_field_type;
+pub mod descriptor;
 
 #[mlua::lua_module]
 fn lua_protobuf_rs(lua: &Lua) -> LuaResult<LuaAnyUserData> {
