@@ -6,7 +6,7 @@ use protobuf::MessageDyn;
 use protobuf::reflect::{MessageDescriptor, ReflectValueBox, ReflectValueRef, RuntimeFieldType, RuntimeType};
 
 #[derive(Copy, Clone, Default)]
-pub(crate) struct LuaProtoCodec;
+pub struct LuaProtoCodec;
 
 impl LuaProtoCodec {
     pub fn encode_message(&self, lua_message: Table, descriptor: &MessageDescriptor) -> anyhow::Result<Box<dyn MessageDyn>> {

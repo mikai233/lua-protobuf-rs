@@ -6,13 +6,14 @@ use mlua::{ExternalError, Lua, Table, UserDataMethods};
 use protobuf::MessageDyn;
 use protobuf::reflect::{EnumDescriptor, FileDescriptor, MessageDescriptor};
 use crate::codec::LuaProtoCodec;
+use crate::descriptor::{LuaEnumDescriptor, LuaFileDescriptor, LuaMessageDescriptor};
 
 #[derive(Default)]
 pub struct LuaProtoc {
-    codec: LuaProtoCodec,
-    file_descriptors: HashMap<String, FileDescriptor>,
-    message_descriptors: HashMap<String, MessageDescriptor>,
-    enum_descriptors: HashMap<String, EnumDescriptor>,
+    pub codec: LuaProtoCodec,
+    pub file_descriptors: HashMap<String, LuaFileDescriptor>,
+    pub message_descriptors: HashMap<String, LuaMessageDescriptor>,
+    pub enum_descriptors: HashMap<String, LuaEnumDescriptor>,
 }
 
 impl LuaProtoc {
@@ -30,12 +31,12 @@ impl LuaProtoc {
         let mut enum_descriptors = HashMap::new();
         for file_descriptor in FileDescriptor::new_dynamic_fds(file_protos, &[])? {
             for message_descriptor in file_descriptor.messages() {
-                message_descriptors.insert(message_descriptor.full_name().to_string(), message_descriptor);
+                message_descriptors.insert(message_descriptor.full_name().to_string(), From::from(message_descriptor));
             }
             for enum_descriptor in file_descriptor.enums() {
-                enum_descriptors.insert(enum_descriptor.full_name().to_string(), enum_descriptor);
+                enum_descriptors.insert(enum_descriptor.full_name().to_string(), From::from(enum_descriptor));
             }
-            file_descriptors.insert(file_descriptor.name().to_string(), file_descriptor);
+            file_descriptors.insert(file_descriptor.name().to_string(), From::from(file_descriptor));
         };
         let protoc = LuaProtoc {
             codec: Default::default(),
@@ -91,6 +92,30 @@ impl LuaUserData for LuaProtoc {
         methods.add_function("list_protos", |_, dirs: Vec<String>| {
             let protos = LuaProtoc::list_protos(dirs).iter().map(|p| { p.to_string_lossy().to_string() }).collect::<Vec<String>>();
             Ok(protos)
-        })
+        });
+        methods.add_method("all_file_descriptors", |_, protoc, ()| {
+            let descriptors: Vec<_> = protoc.file_descriptors.values().map(Clone::clone).collect();
+            Ok(descriptors)
+        });
+        methods.add_method("file_descriptor_by_name", |_, protoc, name: String| {
+            let descriptor = protoc.file_descriptors.get(&name).map(Clone::clone);
+            Ok(descriptor)
+        });
+        methods.add_method("all_message_descriptors", |_, protoc, ()| {
+            let descriptors: Vec<_> = protoc.message_descriptors.values().map(Clone::clone).collect();
+            Ok(descriptors)
+        });
+        methods.add_method("message_descriptor_by_name", |_, protoc, name: String| {
+            let descriptor = protoc.message_descriptors.get(&name).map(Clone::clone);
+            Ok(descriptor)
+        });
+        methods.add_method("all_enum_descriptors", |_, protoc, ()| {
+            let descriptors: Vec<_> = protoc.enum_descriptors.values().map(Clone::clone).collect();
+            Ok(descriptors)
+        });
+        methods.add_method("enum_descriptor_by_name", |_, protoc, name: String| {
+            let descriptor = protoc.enum_descriptors.get(&name).map(Clone::clone);
+            Ok(descriptor)
+        });
     }
 }
