@@ -4,93 +4,509 @@
 --- DateTime: 2023/9/15 0:39
 ---
 
---- @class LuaProtoc
-LuaProtoc = {}
+---@class LuaProtoc
+local LuaProtoc = {}
 
---- @param inputs []string
---- @param includes []string
---- @return LuaProtoc
+---@param inputs []string
+---@param includes []string
+---@return LuaProtoc
 function LuaProtoc.compile_file(inputs, includes)
 
 end
 
---- @param proto string
---- @return LuaProtoc
+---@param proto string
+---@return LuaProtoc
 function LuaProtoc.compile_proto(proto)
 
 end
 
---- @param message_full_name string
---- @param message table
---- @return number[]
+---@param message_full_name string
+---@param message table
+---@return number[]
 function LuaProtoc:encode(message_full_name, message)
 
 end
 
---- @param message_full_name string
---- @param bytes number[]
---- @return table
+---@param message_full_name string
+---@param bytes number[]
+---@return table
 function LuaProtoc:decode(message_full_name, bytes)
 
 end
 
---- @param dirs string[]
---- @return string[]
+---@param dirs string[] proto所在的文件夹，只会查找当前文件夹，不会递归
+---@return string[] proto文件的全路径
 function LuaProtoc.list_protos(dirs)
 
 end
 
---- @return FileDescriptor[]
+---@return FileDescriptor[]
 function LuaProtoc:all_file_descriptors()
 
 end
 
---- @param name string
---- @return FileDescriptor
+---@param name string 文件名
+---@return FileDescriptor
 function LuaProtoc:file_descriptor_by_name(name)
 
 end
 
---- @return MessageDescriptor[]
+---@return MessageDescriptor[]
 function LuaProtoc:all_message_descriptors()
 
 end
 
---- @param name string
---- @return MessageDescriptor
+---@param name string 消息全名
+---@return MessageDescriptor
 function LuaProtoc:message_descriptor_by_name(name)
 
 end
 
---- @return EnumDescriptor[]
+---@return EnumDescriptor[]
 function LuaProtoc:all_enum_descriptors()
 
 end
 
---- @param name string
---- @return EnumDescriptor
+---@param name string 枚举全名
+---@return EnumDescriptor
 function LuaProtoc:enum_descriptor_by_name(name)
 
 end
 
---- @class FileDescriptor
-FileDescriptor = { }
+---@class FileDescriptor
+local FileDescriptor = { }
 
---- @return string
+---@return string
 function FileDescriptor:name()
 
 end
 
---- @return string
+---@return string
 function FileDescriptor:package()
 
 end
 
---- @class MessageDescriptor
-MessageDescriptor = {}
+---@return string proto2 proto3
+function FileDescriptor:syntax()
 
---- @class FieldDescriptor
-FieldDescriptor = {}
+end
 
---- @class EnumDescriptor
-EnumDescriptor = {}
+---@return MessageDescriptor[]
+function FileDescriptor:messages()
+
+end
+
+---@return EnumDescriptor[]
+function FileDescriptor:enums()
+
+end
+
+---@return ServiceDescriptor[]
+function FileDescriptor:services()
+
+end
+
+---@return FieldDescriptor[]
+function FileDescriptor:extensions()
+
+end
+
+---@param name string
+---@return MessageDescriptor
+function FileDescriptor:message_by_package_relative_name(name)
+
+end
+
+---@param name string
+---@return EnumDescriptor
+function FileDescriptor:enum_by_package_relative_name(name)
+
+end
+
+---@param name
+---@return MessageDescriptor
+function FileDescriptor:message_by_full_name(name)
+
+end
+
+---@param name string
+---@return EnumDescriptor
+function FileDescriptor:enum_by_full_name(name)
+
+end
+
+---@param proto FileDescriptorProto
+---@param dependencies FileDescriptor[]
+---@return FileDescriptor
+function FileDescriptor:new_dynamic(proto, dependencies)
+
+end
+
+---@param protos FileDescriptorProto[]
+---@param dependencies FileDescriptor[]
+---@return FileDescriptor[]
+function FileDescriptor:new_dynamic_fds(protos, dependencies)
+
+end
+
+---@return FileDescriptorProto
+function FileDescriptor:proto()
+
+end
+
+---@return FileDescriptor[]
+function FileDescriptor:deps()
+
+end
+
+---@return FileDescriptor[]
+function FileDescriptor:public_deps()
+
+end
+
+---@class MessageDescriptor
+local MessageDescriptor = {}
+
+---@return DescriptorProto
+function MessageDescriptor:proto()
+
+end
+
+---@return string
+function MessageDescriptor:name()
+
+end
+
+---@return MessageDescriptor[]
+function MessageDescriptor:nested_messages()
+
+end
+
+---@return EnumDescriptor[]
+function MessageDescriptor:nested_enums()
+
+end
+
+---@return MessageDescriptor
+function MessageDescriptor:enclosing_message()
+
+end
+
+---@return FileDescriptor
+function MessageDescriptor:file_descriptor()
+
+end
+
+---@return FileDescriptorProto
+function MessageDescriptor:file_descriptor_proto()
+
+end
+
+---@return boolean
+function MessageDescriptor:is_map_entry()
+
+end
+
+---@return string
+function MessageDescriptor:full_name()
+
+end
+
+---@return string
+function MessageDescriptor:name_to_package()
+
+end
+
+---@return OneofDescriptor[]
+function MessageDescriptor:all_oneofs()
+
+end
+
+---@return OneofDescriptor[]
+function MessageDescriptor:oneofs()
+
+end
+
+---@param name string
+---@return OneofDescriptor
+function MessageDescriptor:oneof_by_name(name)
+
+end
+
+---@return FieldDescriptor[]
+function MessageDescriptor:fields()
+
+end
+
+---@return FieldDescriptor[]
+function MessageDescriptor:extensions()
+
+end
+
+---@param name string
+---@return FieldDescriptor
+function MessageDescriptor:field_by_name(name)
+
+end
+
+---@param name string
+---@return FieldDescriptor
+function MessageDescriptor:field_by_name_or_json_name(name)
+
+end
+
+---@param number number
+---@return FieldDescriptor
+function MessageDescriptor:field_by_number(number)
+
+end
+
+---@param bytes number[]
+---@return table
+function MessageDescriptor:parse_from_bytes(bytes)
+
+end
+
+---@class FieldDescriptor
+local FieldDescriptor = {}
+
+---@return string
+function FieldDescriptor:name()
+
+end
+
+---@return number
+function FieldDescriptor:number()
+
+end
+
+---@return string
+function FieldDescriptor:full_name()
+
+end
+
+---@return OneofDescriptor
+function FieldDescriptor:containing_oneof_including_synthetic()
+
+end
+
+---@return OneofDescriptor
+function FieldDescriptor:containing_oneof()
+
+end
+
+---@return MessageDescriptor
+function FieldDescriptor:containing_message()
+
+end
+
+---@return string
+function FieldDescriptor:json_name()
+
+end
+
+---@return boolean
+function FieldDescriptor:is_singular()
+
+end
+
+---@return boolean
+function FieldDescriptor:is_required()
+
+end
+
+---@return boolean
+function FieldDescriptor:is_repeated_or_map()
+
+end
+
+---@return boolean
+function FieldDescriptor:is_repeated()
+
+end
+
+---@return boolean
+function FieldDescriptor:is_map()
+
+end
+
+---@return RuntimeType
+function FieldDescriptor:singular_runtime_type()
+
+end
+
+---@return RuntimeFieldType
+function FieldDescriptor:runtime_field_type()
+
+end
+
+---@class EnumDescriptor
+local EnumDescriptor = {}
+
+---@return string
+function EnumDescriptor:name()
+
+end
+
+---@return string
+function EnumDescriptor:full_name()
+
+end
+
+---@return string
+function EnumDescriptor:name_to_package()
+
+end
+
+---@return MessageDescriptor
+function EnumDescriptor:enclosing_message()
+
+end
+
+---@return EnumValueDescriptor[]
+function EnumDescriptor:values()
+
+end
+
+---@param name string
+---@return EnumValueDescriptor
+function EnumDescriptor:value_by_name(name)
+
+end
+
+---@param number number
+---@return EnumValueDescriptor
+function EnumDescriptor:value_by_number(number)
+
+end
+
+---@param index number
+---@return EnumValueDescriptor
+function EnumDescriptor:value_by_index(index)
+
+end
+
+---@return EnumValueDescriptor
+function EnumDescriptor:default_value()
+
+end
+
+---@param number
+---@return EnumValueDescriptor
+function EnumDescriptor:value_by_number_or_default(number)
+
+end
+
+---@class ServiceDescriptor
+local ServiceDescriptor = {}
+
+---@return ServiceDescriptorProto
+function ServiceDescriptor:proto()
+
+end
+
+---@return MethodDescriptor[]
+function ServiceDescriptor:methods()
+
+end
+
+---@class OneofDescriptor
+local OneofDescriptor = {}
+
+---@return OneofDescriptorProto
+function OneofDescriptor:proto()
+
+end
+
+---@return string
+function OneofDescriptor:name()
+
+end
+
+---@return MethodDescriptor
+function OneofDescriptor:containing_message()
+
+end
+
+---@return boolean
+function OneofDescriptor:is_synthetic()
+
+end
+
+---@return FieldDescriptor[]
+function OneofDescriptor:fields()
+
+end
+
+---@class EnumValueDescriptor
+local EnumValueDescriptor = {}
+
+---@return string
+function EnumValueDescriptor:name()
+
+end
+
+---@return number
+function EnumValueDescriptor:number()
+
+end
+
+---@class MethodDescriptor
+local MethodDescriptor = {}
+
+---@return MessageDescriptor
+function MethodDescriptor:descriptor_dyn()
+
+end
+
+---@class FileDescriptorProto
+local FileDescriptorProto = {}
+
+---@return MessageDescriptor
+function FileDescriptorProto:descriptor_dyn()
+
+end
+
+---@class DescriptorProto
+local DescriptorProto = {}
+
+---@return MessageDescriptor
+function DescriptorProto:descriptor_dyn()
+
+end
+
+---@class ServiceDescriptorProto
+local ServiceDescriptorProto = {}
+
+---@return MessageDescriptor
+function ServiceDescriptorProto:descriptor_dyn()
+
+end
+
+---@class OneofDescriptorProto
+local OneofDescriptorProto = {}
+
+---@return MessageDescriptor
+function OneofDescriptorProto:descriptor_dyn()
+
+end
+
+---@class RuntimeType
+---@field i32 string
+---@field i64 string
+---@field u32 string
+---@field u64 string
+---@field f32 string
+---@field f64 string
+---@field bool string
+---@field string string
+---@field bytes string
+---@field enum EnumDescriptor
+---@field message MessageDescriptor
+local RuntimeType = {}
+
+---@class RuntimeFieldType
+---@field singular RuntimeType
+---@field repeated RuntimeType
+---@field map RuntimeType
+local RuntimeFieldType = {}

@@ -1,6 +1,9 @@
 use std::ops::{Deref, DerefMut};
 use mlua::prelude::LuaUserData;
+use mlua::UserDataMethods;
 use protobuf::descriptor::DescriptorProto;
+use protobuf::MessageDyn;
+use crate::descriptor::message_descriptor::LuaMessageDescriptor;
 
 pub struct LuaDescriptorProto(DescriptorProto);
 
@@ -24,4 +27,11 @@ impl From<DescriptorProto> for LuaDescriptorProto {
     }
 }
 
-impl LuaUserData for LuaDescriptorProto {}
+impl LuaUserData for LuaDescriptorProto {
+    fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
+        methods.add_method("descriptor_dyn", |_, this, ()| {
+            let descriptor: LuaMessageDescriptor = From::from(this.descriptor_dyn());
+            Ok(descriptor)
+        })
+    }
+}
