@@ -10,7 +10,7 @@
 
 # 使用
 
-## lua里直接编译proto
+## lua里直接解析proto
 
 ```lua
 --- @type LuaProtoc
@@ -55,7 +55,7 @@ local decode_login_response = protoc:decode("LoginResponse", login_response_byte
 print(decode_login_response.player.id)
 ```
 
-## lua里编译proto文件
+## lua里解析proto文件
 
 - player.proto
 
@@ -143,7 +143,23 @@ for _, field in pairs(login_response_descriptor:fields()) do
         print(singular.message:name())
     end
 end
+```
 
+## proto代码提示
+
+可以使用`gen_lua`
+来生成lua的proto模板文件，来获得更好的代码编写体验，本项目是基于[EmmyLua](https://github.com/EmmyLua/IntelliJ-EmmyLua)
+插件做的注解提示
+
+```lua
+---@class LoginRequest
+---@field id number
+---@field world_id number
+local LoginRequest
+
+---@class LoginResponse
+---@field player Player
+local LoginResponse
 ```
 
 # 编译
@@ -158,3 +174,8 @@ end
 
 - 编译到Linux：`cross build --target x86_64-unknown-linux-gnu --release`
 - 编译到Android `cross build --target armv7-linux-androideabi --release`
+
+# 注意事项
+
+对于非`oneof`类型的字段，在将二进制消息解析成table时，如果该字段没有设置值，都会给一个默认值，而对于`oneof`类型的字段，如果都没有设置过值，
+那么这些字段都将不存在，也就是说`oneof`的所有字段只可能存在一个或者都不存在

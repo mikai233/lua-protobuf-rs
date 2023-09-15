@@ -20,6 +20,11 @@ function LuaProtoc.compile_proto(proto)
 
 end
 
+---@param dir string
+function LuaProtoc:gen_lua(dir)
+
+end
+
 ---@param message_full_name string
 ---@param message table
 ---@return number[]

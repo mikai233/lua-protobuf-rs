@@ -25,3 +25,5 @@ print(decode_player.id)
 local login_response_bytes = protoc:encode("com.mikai233.LoginResponse", {})
 local decode_login_response = protoc:decode("com.mikai233.LoginResponse", login_response_bytes)
 print(decode_login_response.player.id)
+
+protoc:gen_lua("proto")

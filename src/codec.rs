@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use anyhow::{anyhow, Context};
 use mlua::{Integer, Lua, Number, Table, Value};
@@ -49,13 +50,26 @@ impl LuaProtoCodec {
         let lua_message = lua.create_table()?;
         let descriptor = message.descriptor_dyn();
         let message_name = descriptor.name();
+        let mut oneof_field = HashSet::new();
+        for oneof_descriptor in descriptor.oneofs() {
+            for field in oneof_descriptor.fields() {
+                oneof_field.insert(field.name().to_string());
+            }
+        }
         for field in descriptor.fields() {
             let field_name = field.name();
             match field.runtime_field_type() {
                 RuntimeFieldType::Singular(_) => {
-                    let value = field.get_singular_field_or_default(message);
-                    let field_table = self.unbox_value(message_name, field_name, value, lua)?;
-                    lua_message.set(field_name, field_table)?;
+                    if oneof_field.contains(field_name) {
+                        if let Some(value) = field.get_singular(message) {
+                            let field_table = self.unbox_value(message_name, field_name, value, lua)?;
+                            lua_message.set(field_name, field_table)?;
+                        }
+                    } else {
+                        let value = field.get_singular_field_or_default(message);
+                        let field_table = self.unbox_value(message_name, field_name, value, lua)?;
+                        lua_message.set(field_name, field_table)?;
+                    }
                 }
                 RuntimeFieldType::Repeated(_) => {
                     let field_table = lua.create_table()?;

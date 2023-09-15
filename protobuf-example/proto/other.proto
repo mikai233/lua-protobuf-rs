@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package com.mikai233;
+
+message TestMessage{
+  message A{
+    int32 a = 1;
+    string b = 2;
+    message B{
+      int32 a = 1;
+      oneof test_one_of3{
+        string b = 2;
+        string c = 3;
+        A ccccccccc = 4;
+      }
+    }
+    map<int32, B> c = 3;
+    repeated B d = 4;
+    message A{
+
+    }
+  }
+  message B{
+
+  }
+  A a = 1;
+  oneof test_one_of {
+    string one_of_b = 2;
+    string one_of_c = 3;
+  }
+  oneof test_one_of2{
+    A one_of_b2 = 4;
+    B one_of_c2 = 5;
+  }
+}
+
+enum TestEnum{
+  A = 0;
+  B = 1;
+}
