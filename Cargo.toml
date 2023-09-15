@@ -16,7 +16,7 @@ lua51 = ["mlua/lua51"]
 luajit = ["mlua/luajit"]
 
 [dependencies]
-mlua = { version = "0.9.1", features = ["module"] }
+mlua = { version = "0.9.1", features = ["module", "macros"] }
 anyhow = "1.0.71"
 walkdir = "2.3.3"
 protobuf = "3.2.0"

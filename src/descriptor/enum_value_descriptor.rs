@@ -38,7 +38,7 @@ impl LuaUserData for LuaEnumValueDescriptor {
             Ok(this.value())
         });
         methods.add_method("enum_descriptor", |_, this, ()| {
-            let descriptor: LuaEnumDescriptor = From::from(this.enum_descriptor().clone());
+            let descriptor: LuaEnumDescriptor = this.enum_descriptor().clone().into();
             Ok(descriptor)
         });
     }

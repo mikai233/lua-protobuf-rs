@@ -28,7 +28,7 @@ impl From<RuntimeFieldType> for LuaRuntimeFieldType {
 
 impl LuaUserData for LuaRuntimeFieldType {
     fn add_fields<'lua, F: UserDataFields<'lua, Self>>(fields: &mut F) {
-        fields.add_field_method_get("singular", |lua, this| {
+        fields.add_field_method_get("singular", |_, this| {
             if let RuntimeFieldType::Singular(ty) = this.deref() {
                 let ty: LuaRuntimeType = From::from(ty.clone());
                 Ok(Some(ty))

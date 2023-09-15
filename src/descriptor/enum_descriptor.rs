@@ -1,7 +1,9 @@
 use std::ops::{Deref, DerefMut};
-use mlua::prelude::LuaUserData;
+
 use mlua::UserDataMethods;
+use mlua::prelude::LuaUserData;
 use protobuf::reflect::EnumDescriptor;
+
 use crate::descriptor::enum_value_descriptor::LuaEnumValueDescriptor;
 use crate::descriptor::message_descriptor::LuaMessageDescriptor;
 
@@ -55,16 +57,16 @@ impl LuaUserData for LuaEnumDescriptor {
             let descriptor: Option<LuaEnumValueDescriptor> = this.value_by_number(number).map(From::from);
             Ok(descriptor)
         });
-        methods.add_method("value_by_number", |_, this, index: usize| {
-            let descriptor: LuaEnumValueDescriptor = From::from(this.value_by_index(index));
+        methods.add_method("value_by_index", |_, this, index: usize| {
+            let descriptor: LuaEnumValueDescriptor = this.value_by_index(index).into();
             Ok(descriptor)
         });
         methods.add_method("default_value", |_, this, ()| {
-            let descriptor: LuaEnumValueDescriptor = From::from(this.default_value());
+            let descriptor: LuaEnumValueDescriptor = this.default_value().into();
             Ok(descriptor)
         });
         methods.add_method("value_by_number_or_default", |_, this, number: i32| {
-            let descriptor: LuaEnumValueDescriptor = From::from(this.value_by_number_or_default(number));
+            let descriptor: LuaEnumValueDescriptor = this.value_by_number_or_default(number).into();
             Ok(descriptor)
         });
     }
