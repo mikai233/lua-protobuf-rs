@@ -61,7 +61,7 @@ impl LuaProtoc {
     pub fn gen_lua(&self, dir: String) -> anyhow::Result<()> {
         let path = PathBuf::from(dir);
         for (_, file_descriptor) in &self.file_descriptors {
-            let name = file_descriptor.name();
+            let name = file_descriptor.name().strip_suffix(".proto").expect("file descriptor not a proto file");
             let mut message_or_enum = vec![];
             for message_descriptor in file_descriptor.messages() {
                 let name = message_descriptor.name().to_string();

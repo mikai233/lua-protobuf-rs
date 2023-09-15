@@ -2,7 +2,7 @@
 
 此项目使用的是rust的[protobuf](https://github.com/stepancheg/rust-protobuf)实现，编写的rust到lua的protobuf绑定
 
-可以做到在运行时加载proto文件，将protobuf二进制数据解析成lua table以及将lua table编码成二进制数据以及protobuf在lua下的反射功能
+可以做到在运行时加载proto文件，将protobuf二进制数据解析成lua table、将lua table编码成二进制数据以及protobuf在lua下的反射功能
 
 绑定的API可以到[这里](https://docs.rs/protobuf/latest/protobuf/)
 查看，绑定了几个比较关键的struct， `FileDescriptor` `MessageDescriptor`
