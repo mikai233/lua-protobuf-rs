@@ -1,0 +1,13 @@
+syntax = "proto3";
+import "player.proto";
+
+package com.mikai233;
+
+message LoginRequest{
+  int64 id = 1;
+  int64 world_id = 2;
+}
+
+message LoginResponse{
+  Player player = 1;
+}

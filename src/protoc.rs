@@ -19,7 +19,7 @@ pub struct LuaProtoc {
 }
 
 impl LuaProtoc {
-    pub fn new(inputs: impl IntoIterator<Item=impl AsRef<Path>>, includes: impl IntoIterator<Item=impl AsRef<Path>>) -> anyhow::Result<Self> {
+    pub fn compile_file(inputs: impl IntoIterator<Item=impl AsRef<Path>>, includes: impl IntoIterator<Item=impl AsRef<Path>>) -> anyhow::Result<Self> {
         let protoc_path = protoc_bin_vendored::protoc_bin_path().context("unable to find protoc bin vendored")?;
         let file_protos = protobuf_parse::Parser::new()
             .protoc()
@@ -47,6 +47,13 @@ impl LuaProtoc {
             enum_descriptors,
         };
         Ok(protoc)
+    }
+
+    pub fn compile_proto(proto: String) -> anyhow::Result<Self> {
+        let temp_dir = tempfile::tempdir().context("unable to get tempdir")?;
+        let tempfile = temp_dir.path().join("temp.proto");
+        std::fs::write(&tempfile, proto).context("unable to write data to tempfile")?;
+        LuaProtoc::compile_file([&tempfile], [&temp_dir])
     }
 
     pub fn encode(&self, message_full_name: String, lua_message: Table) -> anyhow::Result<Box<dyn MessageDyn>> {
@@ -78,8 +85,15 @@ impl LuaProtoc {
 
 impl LuaUserData for LuaProtoc {
     fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
-        methods.add_function("new", |_, (inputs, includes): (Vec<String>, Vec<String>)| {
-            let protoc = LuaProtoc::new(inputs, includes).map_err(|e| e.into_lua_err())?;
+        methods.add_function("compile_file", |_, (inputs, includes): (Vec<String>, Vec<String>)| {
+            if includes.is_empty() {
+                return Err(anyhow!("includes mut not empty").into_lua_err());
+            }
+            let protoc = LuaProtoc::compile_file(inputs, includes).map_err(|e| e.into_lua_err())?;
+            Ok(protoc)
+        });
+        methods.add_function("compile_proto", |_, proto: String| {
+            let protoc = LuaProtoc::compile_proto(proto).map_err(|e| e.into_lua_err())?;
             Ok(protoc)
         });
         methods.add_method("encode", |_, protoc, (message_full_name, lua_message): (String, Table)| {

@@ -7,10 +7,16 @@
 --- @class LuaProtoc
 LuaProtoc = {}
 
---- @param inputs table
---- @param inputs table
+--- @param inputs []string
+--- @param includes []string
 --- @return LuaProtoc
-function LuaProtoc.new(inputs, includes)
+function LuaProtoc.compile_file(inputs, includes)
+
+end
+
+--- @param proto string
+--- @return LuaProtoc
+function LuaProtoc.compile_proto(proto)
 
 end
 

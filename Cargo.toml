@@ -19,6 +19,7 @@ luajit = ["mlua/luajit"]
 mlua = { version = "0.9.1", features = ["module", "macros"] }
 anyhow = "1.0.71"
 walkdir = "2.3.3"
+tempfile = "3.8.0"
 protobuf = "3.2.0"
 protobuf-parse = "3.2.0"
 protoc-bin-vendored = "3.0.0"

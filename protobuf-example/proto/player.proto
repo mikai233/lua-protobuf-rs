@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package com.mikai233;
+
+message Player{
+  int64 id = 1;
+  int64 world_id = 2;
+  string nickname = 3;
+  int32 exp = 4;
+}
