@@ -1,5 +1,6 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::ops::Deref;
+
 use anyhow::{anyhow, Context};
 use mlua::{Integer, Lua, Number, Table, Value};
 use mlua::prelude::LuaValue;

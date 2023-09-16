@@ -20,7 +20,18 @@ function LuaProtoc.compile_proto(proto)
 
 end
 
----@param dir string
+---@param dir string .pb所在目录
+---@return LuaProtoc
+function LuaProtoc.parse_pb(dir)
+
+end
+
+---@param dir string 生成.pb二进制文件的目录
+function LuaProtoc:gen_pb(dir)
+
+end
+
+---@param dir string 生成lua提示文件的目录
 function LuaProtoc:gen_lua(dir)
 
 end

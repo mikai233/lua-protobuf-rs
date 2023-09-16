@@ -2,9 +2,10 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context};
-use mlua::{AsChunk, ExternalError, Lua, Table, UserDataMethods};
+use mlua::{ExternalError, Lua, Table, UserDataMethods};
 use mlua::prelude::LuaUserData;
-use protobuf::MessageDyn;
+use protobuf::descriptor::FileDescriptorProto;
+use protobuf::{CodedInputStream, Message, MessageDyn};
 use protobuf::reflect::{EnumDescriptor, FileDescriptor, MessageDescriptor, RuntimeFieldType, RuntimeType};
 
 use crate::codec::LuaProtoCodec;
@@ -21,6 +22,28 @@ pub struct LuaProtoc {
 }
 
 impl LuaProtoc {
+    pub fn new(descriptors: Vec<FileDescriptor>) -> Self {
+        let codec = LuaProtoCodec::default();
+        let mut file_descriptors = HashMap::new();
+        let mut message_descriptors = HashMap::new();
+        let mut enum_descriptors = HashMap::new();
+        for file_descriptor in descriptors {
+            for message_descriptor in file_descriptor.messages() {
+                message_descriptors.insert(message_descriptor.full_name().to_string(), From::from(message_descriptor));
+            }
+            for enum_descriptor in file_descriptor.enums() {
+                enum_descriptors.insert(enum_descriptor.full_name().to_string(), From::from(enum_descriptor));
+            }
+            file_descriptors.insert(file_descriptor.name().to_string(), file_descriptor.into());
+        };
+        Self {
+            codec,
+            file_descriptors,
+            message_descriptors,
+            enum_descriptors,
+        }
+    }
+
     pub fn compile_file(inputs: impl IntoIterator<Item=impl AsRef<Path>>, includes: impl IntoIterator<Item=impl AsRef<Path>>) -> anyhow::Result<Self> {
         let protoc_path = protoc_bin_vendored::protoc_bin_path().context("unable to find protoc bin vendored")?;
         let file_protos = protobuf_parse::Parser::new()
@@ -30,24 +53,8 @@ impl LuaProtoc {
             .includes(includes)
             .parse_and_typecheck()?
             .file_descriptors;
-        let mut file_descriptors = HashMap::new();
-        let mut message_descriptors = HashMap::new();
-        let mut enum_descriptors = HashMap::new();
-        for file_descriptor in FileDescriptor::new_dynamic_fds(file_protos, &[])? {
-            for message_descriptor in file_descriptor.messages() {
-                message_descriptors.insert(message_descriptor.full_name().to_string(), From::from(message_descriptor));
-            }
-            for enum_descriptor in file_descriptor.enums() {
-                enum_descriptors.insert(enum_descriptor.full_name().to_string(), From::from(enum_descriptor));
-            }
-            file_descriptors.insert(file_descriptor.name().to_string(), From::from(file_descriptor));
-        };
-        let protoc = LuaProtoc {
-            codec: Default::default(),
-            file_descriptors,
-            message_descriptors,
-            enum_descriptors,
-        };
+        let file_descriptors: Vec<FileDescriptor> = FileDescriptor::new_dynamic_fds(file_protos, &[])?;
+        let protoc = LuaProtoc::new(file_descriptors);
         Ok(protoc)
     }
 
@@ -56,6 +63,33 @@ impl LuaProtoc {
         let tempfile = temp_dir.path().join("temp.proto");
         std::fs::write(&tempfile, proto).context("unable to write data to tempfile")?;
         LuaProtoc::compile_file([&tempfile], [&temp_dir])
+    }
+
+    pub fn parse_pb(dir: String) -> anyhow::Result<Self> {
+        let mut protos = vec![];
+        for entry in walkdir::WalkDir::new(dir).into_iter().filter_map(|file| file.ok()) {
+            let pb_path = entry.path();
+            if pb_path.extension().and_then(|e| Some(e == "pb")).unwrap_or(false) {
+                let mut pb_file = std::fs::File::open(pb_path).context(format!("failed open {}", pb_path.to_string_lossy()))?;
+                let mut input = CodedInputStream::new(&mut pb_file);
+                let proto = FileDescriptorProto::parse_from(&mut input)?;
+                protos.push(proto);
+            }
+        }
+        let file_descriptors = FileDescriptor::new_dynamic_fds(protos, &[])?;
+        let protoc = LuaProtoc::new(file_descriptors);
+        Ok(protoc)
+    }
+
+    pub fn gen_pb(&self, dir: String) -> anyhow::Result<()> {
+        let path = PathBuf::from(dir);
+        for (_, file_descriptor) in &self.file_descriptors {
+            let name = file_descriptor.name().strip_suffix(".proto").expect("file descriptor not a proto file");
+            let file_name = format!("{}.pb", name);
+            let file_path = path.join(file_name);
+            std::fs::write(&file_path, file_descriptor.proto().write_to_bytes()?).context(format!("failed write lua to file {}", file_path.to_string_lossy()))?;
+        }
+        Ok(())
     }
 
     pub fn gen_lua(&self, dir: String) -> anyhow::Result<()> {
@@ -113,9 +147,9 @@ impl LuaProtoc {
             fields.push(field)
         }
         let message_table = if fields.is_empty() {
-            format!("{}\nlocal {}\n", class, message_with_parent)
+            format!("{}\nlocal {} = {{ }}\n", class, message_with_parent)
         } else {
-            format!("{}\n{}\nlocal {}\n", class, fields.join("\n"), message_with_parent)
+            format!("{}\n{}\nlocal {} = {{ }}\n", class, fields.join("\n"), message_with_parent)
         };
         messages.push(message_table);
         messages
@@ -259,6 +293,9 @@ impl LuaProtoc {
 impl LuaUserData for LuaProtoc {
     fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
         methods.add_function("compile_file", |_, (inputs, includes): (Vec<String>, Vec<String>)| {
+            if inputs.is_empty() {
+                return Err(anyhow!("inputs mut not empty").into_lua_err());
+            }
             if includes.is_empty() {
                 return Err(anyhow!("includes mut not empty").into_lua_err());
             }
@@ -268,6 +305,14 @@ impl LuaUserData for LuaProtoc {
         methods.add_function("compile_proto", |_, proto: String| {
             let protoc = LuaProtoc::compile_proto(proto).map_err(|e| e.into_lua_err())?;
             Ok(protoc)
+        });
+        methods.add_function("parse_pb", |_, dir: String| {
+            let protoc = LuaProtoc::parse_pb(dir).map_err(|e| e.into_lua_err())?;
+            Ok(protoc)
+        });
+        methods.add_method("gen_pb", |_, this, dir: String| {
+            this.gen_pb(dir).map_err(|e| e.into_lua_err())?;
+            Ok(())
         });
         methods.add_method("gen_lua", |_, this, dir: String| {
             this.gen_lua(dir).map_err(|e| e.into_lua_err())?;
