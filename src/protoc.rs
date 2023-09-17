@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Context};
 use mlua::{ExternalError, Lua, Table, UserDataMethods};
 use mlua::prelude::LuaUserData;
-use protobuf::descriptor::FileDescriptorProto;
 use protobuf::{CodedInputStream, Message, MessageDyn};
+use protobuf::descriptor::FileDescriptorProto;
 use protobuf::reflect::{EnumDescriptor, FileDescriptor, MessageDescriptor, RuntimeFieldType, RuntimeType};
 
 use crate::codec::LuaProtoCodec;
@@ -45,14 +45,16 @@ impl LuaProtoc {
     }
 
     pub fn compile_file(inputs: impl IntoIterator<Item=impl AsRef<Path>>, includes: impl IntoIterator<Item=impl AsRef<Path>>) -> anyhow::Result<Self> {
-        let protoc_path = protoc_bin_vendored::protoc_bin_path().context("unable to find protoc bin vendored")?;
-        let file_protos = protobuf_parse::Parser::new()
-            .protoc()
-            .protoc_path(&*protoc_path)
-            .inputs(inputs)
-            .includes(includes)
-            .parse_and_typecheck()?
-            .file_descriptors;
+        let mut parser = protobuf_parse::Parser::new();
+        parser.inputs(inputs).includes(includes);
+
+        #[cfg(feature = "google_protoc")]
+        parser.protoc();
+
+        #[cfg(feature = "vendored_protoc")]
+        parser.protoc_path(&protoc_bin_vendored::protoc_bin_path().context("unable to find protoc bin vendored")?);
+
+        let file_protos = parser.parse_and_typecheck()?.file_descriptors;
         let file_descriptors: Vec<FileDescriptor> = FileDescriptor::new_dynamic_fds(file_protos, &[])?;
         let protoc = LuaProtoc::new(file_descriptors);
         Ok(protoc)
@@ -320,7 +322,8 @@ impl LuaUserData for LuaProtoc {
         });
         methods.add_method("encode", |_, protoc, (message_full_name, lua_message): (String, Table)| {
             let message = protoc.encode(message_full_name, lua_message).map_err(|e| e.into_lua_err())?;
-            let message_bytes = message.write_to_bytes_dyn().map_err(|e| e.into_lua_err())?;
+            let mut message_bytes = Vec::with_capacity(message.compute_size_dyn() as usize);
+            message.write_to_vec_dyn(&mut message_bytes).map_err(|e| e.into_lua_err())?;
             Ok(message_bytes)
         });
         methods.add_method("decode", |lua, protoc, (message_full_name, message_bytes): (String, Vec<u8>)| {

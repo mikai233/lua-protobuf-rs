@@ -10,8 +10,16 @@ pub mod runtime_field_type;
 pub mod descriptor;
 pub mod descriptor_proto;
 
+#[cfg(feature = "default")]
 #[mlua::lua_module]
 fn lua_protobuf_rs(lua: &Lua) -> LuaResult<LuaAnyUserData> {
+    let protoc = lua.create_proxy::<LuaProtoc>()?;
+    Ok(protoc)
+}
+
+#[cfg(feature = "default")]
+#[mlua::lua_module]
+fn liblua_protobuf_rs(lua: &Lua) -> LuaResult<LuaAnyUserData> {
     let protoc = lua.create_proxy::<LuaProtoc>()?;
     Ok(protoc)
 }
