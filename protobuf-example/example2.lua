@@ -9,7 +9,7 @@ local luaProtoc = require("lua_protobuf_rs")
 
 local protos = luaProtoc.list_protos({ "proto" })
 
-local protoc = luaProtoc.compile_file(protos, { "proto" })
+local protoc = luaProtoc.parse_files(protos, { "proto" })
 
 local player = {
     id = 2347239423213,

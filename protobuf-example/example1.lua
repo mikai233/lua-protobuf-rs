@@ -28,7 +28,7 @@ message LoginResponse{
 }
 ]]
 
-local protoc = luaProtoc.compile_proto(proto)
+local protoc = luaProtoc.parse_proto(proto)
 
 local player = {
     id = 2347239423213,

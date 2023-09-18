@@ -11,7 +11,7 @@ local inspect = require("inspect")
 
 local protos = luaProtoc.list_protos({ "proto" })
 
-local protoc = luaProtoc.compile_file(protos, { "proto" })
+local protoc = luaProtoc.parse_files(protos, { "proto" })
 
 -- one_of_b和one_of_c同时设置时，只会有一个生效，并且因为lua迭代的不确定性，生效的字段随机
 local test = { a = { a = 0, b = "", c = { [12] = { a = 11 }, [2324382] = { a = 22 } }, d = {} }, one_of_b = "hello", one_of_c = "world" }

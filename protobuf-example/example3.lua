@@ -9,7 +9,7 @@ local luaProtoc = require("lua_protobuf_rs")
 
 local protos = luaProtoc.list_protos({ "proto" })
 
-local protoc = luaProtoc.compile_file(protos, { "proto" })
+local protoc = luaProtoc.parse_files(protos, { "proto" })
 
 local player_descriptor = protoc:message_descriptor_by_name("com.mikai233.Player")
 

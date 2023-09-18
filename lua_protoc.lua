@@ -10,13 +10,13 @@ local LuaProtoc = {}
 ---@param inputs []string
 ---@param includes []string
 ---@return LuaProtoc
-function LuaProtoc.compile_file(inputs, includes)
+function LuaProtoc.parse_files(inputs, includes)
 
 end
 
 ---@param proto string
 ---@return LuaProtoc
-function LuaProtoc.compile_proto(proto)
+function LuaProtoc.parse_proto(proto)
 
 end
 
@@ -26,13 +26,13 @@ function LuaProtoc.parse_pb(dir)
 
 end
 
----@param dir string 生成.pb二进制文件的目录
-function LuaProtoc:gen_pb(dir)
+---@param path string 生成.pb二进制文件的目录
+function LuaProtoc:gen_pb(path)
 
 end
 
----@param dir string 生成lua提示文件的目录
-function LuaProtoc:gen_lua(dir)
+---@param path string 生成lua提示文件的目录
+function LuaProtoc:gen_lua(path)
 
 end
 
@@ -50,9 +50,9 @@ function LuaProtoc:decode(message_full_name, bytes)
 
 end
 
----@param dirs string[] proto所在的文件夹，只会查找当前文件夹，不会递归
----@return string[] proto文件的全路径
-function LuaProtoc.list_protos(dirs)
+---@param paths string[] proto所在的文件夹路径，只会查找当前文件夹，不会递归
+---@return string[] 文件夹里面proto文件的全路径
+function LuaProtoc.list_protos(paths)
 
 end
 
