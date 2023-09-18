@@ -38,19 +38,19 @@ impl LuaUserData for LuaDescriptorProto {
             Ok(this.name.clone())
         });
         fields.add_field_method_get("field", |_, this| {
-            let field: Vec<LuaFieldDescriptorProto> = this.field.iter().map(From::from).collect();
+            let field: Vec<LuaFieldDescriptorProto> = this.field.iter().map(Clone::clone).map(From::from).collect();
             Ok(field)
         });
         fields.add_field_method_get("extension", |_, this| {
-            let extension: Vec<LuaFieldDescriptorProto> = this.extension.iter().map(From::from).collect();
+            let extension: Vec<LuaFieldDescriptorProto> = this.extension.iter().map(Clone::clone).map(From::from).collect();
             Ok(extension)
         });
         fields.add_field_method_get("nested_type", |_, this| {
-            let nested_type: Vec<LuaEnumDescriptorProto> = this.nested_type.iter().map(From::from).collect();
+            let nested_type: Vec<LuaDescriptorProto> = this.nested_type.iter().map(Clone::clone).map(From::from).collect();
             Ok(nested_type)
         });
         fields.add_field_method_get("enum_type", |_, this| {
-            let enum_type: Vec<LuaEnumDescriptorProto> = this.nested_type.iter().map(From::from).collect();
+            let enum_type: Vec<LuaEnumDescriptorProto> = this.enum_type.iter().map(Clone::clone).map(From::from).collect();
             Ok(enum_type)
         });
     }

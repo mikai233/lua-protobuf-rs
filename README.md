@@ -162,6 +162,22 @@ local LoginRequest
 local LoginResponse
 ```
 
+# xLua插件集成
+
+设置环境变量 `LUA_LIB_NAME` `LUA_LIB`为xlua的头文件目录以及xlua的库名，然后重新编译此项目即可
+注意xlua的版本一定要和此项目的lua版本要对应
+
+```csharp
+[DllImport("lua_protobuf_rs", CallingConvention = CallingConvention.Cdecl)]
+public static extern int luaopen_lua_protobuf_rs(System.IntPtr L);
+
+[MonoPInvokeCallback(typeof(LuaDLL.lua_CSFunction))]
+public static int LoadProtobufRs(System.IntPtr L)
+{
+    return luaopen_lua_protobuf_rs(L);
+}
+```
+
 # 编译
 
 得益于Cargo，编译变得非常简单，只需要安装Rust，然后执行`cargo build --release`就可以得到当前平台的库文件
