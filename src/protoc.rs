@@ -321,13 +321,19 @@ impl LuaUserData for LuaProtoc {
             Ok(())
         });
         methods.add_method("encode", |_, protoc, (message_full_name, lua_message): (String, Table)| {
-            let message = protoc.encode(message_full_name, lua_message).map_err(|e| e.into_lua_err())?;
+            let ctx = format!("encode message {} failed", message_full_name);
+            let message = protoc.encode(message_full_name, lua_message)
+                .context(ctx)
+                .map_err(|e| e.into_lua_err())?;
             let mut message_bytes = Vec::with_capacity(message.compute_size_dyn() as usize);
             message.write_to_vec_dyn(&mut message_bytes).map_err(|e| e.into_lua_err())?;
             Ok(message_bytes)
         });
         methods.add_method("decode", |lua, protoc, (message_full_name, message_bytes): (String, Vec<u8>)| {
-            let message = protoc.decode(lua, message_full_name, message_bytes.as_ref()).map_err(|e| e.into_lua_err())?;
+            let ctx = format!("decode message {} failed", message_full_name);
+            let message = protoc.decode(lua, message_full_name, message_bytes.as_ref())
+                .context(ctx)
+                .map_err(|e| e.into_lua_err())?;
             Ok(message)
         });
         methods.add_function("list_protos", |_, paths: Vec<String>| {
