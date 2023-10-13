@@ -3,6 +3,12 @@ name = "lua-protobuf-rs"
 version = "0.1.0"
 edition = "2021"
 authors = ["mikai233"]
+description = "lua protobuf"
+homepage = "https://github.com/mikai233/lua-protobuf-rs"
+keywords = ["protobuf", "lua"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/mikai233/lua-protobuf-rs"
+readme = "README.md"
 
 [lib]
 crate-type = ["cdylib", "lib"]
