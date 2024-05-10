@@ -301,30 +301,42 @@ impl LuaUserData for LuaProtoc {
             if includes.is_empty() {
                 return Err(anyhow!("includes mut not empty").into_lua_err());
             }
-            let protoc = LuaProtoc::parse_files(inputs, includes).map_err(|e| e.into_lua_err())?;
+            let protoc = LuaProtoc::parse_files(inputs, includes).map_err(|e| {
+                anyhow!("parse_files failed: {:?}", e).into_lua_err()
+            })?;
             Ok(protoc)
         });
         methods.add_function("parse_proto", |_, proto: String| {
-            let protoc = LuaProtoc::parse_proto(proto).map_err(|e| e.into_lua_err())?;
+            let protoc = LuaProtoc::parse_proto(proto).map_err(|e| {
+                anyhow!("parse_proto proto failed: {:?}", e).into_lua_err()
+            })?;
             Ok(protoc)
         });
         methods.add_function("parse_pb", |_, dir: String| {
-            let protoc = LuaProtoc::parse_pb(dir).map_err(|e| e.into_lua_err())?;
+            let protoc = LuaProtoc::parse_pb(dir).map_err(|e| {
+                anyhow!("parse_pb failed: {:?}", e).into_lua_err()
+            })?;
             Ok(protoc)
         });
         methods.add_method("gen_pb", |_, this, path: String| {
-            this.gen_pb(path).map_err(|e| e.into_lua_err())?;
+            this.gen_pb(path).map_err(|e| {
+                anyhow!("gen_pb failed: {:?}", e).into_lua_err()
+            })?;
             Ok(())
         });
         methods.add_method("gen_lua", |_, this, path: String| {
-            this.gen_lua(path).map_err(|e| e.into_lua_err())?;
+            this.gen_lua(path).map_err(|e| {
+                anyhow!("gen_lua failed: {:?}", e).into_lua_err()
+            })?;
             Ok(())
         });
         methods.add_method("encode", |_, protoc, (message_full_name, lua_message): (String, Table)| {
             let ctx = format!("encode message {} failed", message_full_name);
             let message = protoc
                 .encode(message_full_name, lua_message)
-                .map_err(|e| e.into_lua_err());
+                .map_err(|e| {
+                    anyhow!("encode message failed: {:?}", e).into_lua_err()
+                });
             let message = ErrorContext::context(message, ctx)?;
             let mut message_bytes = Vec::with_capacity(message.compute_size_dyn() as usize);
             message.write_to_vec_dyn(&mut message_bytes).map_err(|e| e.into_lua_err())?;
@@ -334,7 +346,9 @@ impl LuaUserData for LuaProtoc {
             let ctx = format!("decode message {} failed", message_full_name);
             let message = protoc
                 .decode(lua, message_full_name, message_bytes.as_ref())
-                .map_err(|e| e.into_lua_err());
+                .map_err(|e| {
+                    anyhow!("decode message failed: {:?}", e).into_lua_err()
+                });
             let message = ErrorContext::context(message, ctx)?;
             Ok(message)
         });
