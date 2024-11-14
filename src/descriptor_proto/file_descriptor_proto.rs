@@ -1,43 +1,25 @@
-use std::ops::{Deref, DerefMut};
-
-use mlua::UserDataMethods;
 use mlua::prelude::LuaUserData;
+use mlua::UserDataMethods;
 use protobuf::descriptor::FileDescriptorProto;
 use protobuf::MessageDyn;
 
 use crate::descriptor::message_descriptor::LuaMessageDescriptor;
 
-#[derive(PartialEq, Clone, Default, Debug, mlua::FromLua)]
+#[derive(
+    PartialEq,
+    Clone,
+    Default,
+    Debug,
+    mlua::FromLua,
+    derive_more::Deref,
+    derive_more::DerefMut,
+    derive_more::From,
+    derive_more::Into,
+)]
 pub struct LuaFileDescriptorProto(FileDescriptorProto);
 
-impl Deref for LuaFileDescriptorProto {
-    type Target = FileDescriptorProto;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for LuaFileDescriptorProto {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl From<FileDescriptorProto> for LuaFileDescriptorProto {
-    fn from(value: FileDescriptorProto) -> Self {
-        LuaFileDescriptorProto(value)
-    }
-}
-
-impl Into<FileDescriptorProto> for LuaFileDescriptorProto {
-    fn into(self) -> FileDescriptorProto {
-        self.0
-    }
-}
-
 impl LuaUserData for LuaFileDescriptorProto {
-    fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
+    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("descriptor_dyn", |_, this, ()| {
             let descriptor: LuaMessageDescriptor = From::from(this.descriptor_dyn());
             Ok(descriptor)

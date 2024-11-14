@@ -1,8 +1,8 @@
-use std::ops::{Deref, DerefMut};
+use crate::runtime_type::LuaRuntimeType;
 use mlua::prelude::LuaUserData;
 use mlua::UserDataFields;
 use protobuf::reflect::RuntimeFieldType;
-use crate::runtime_type::LuaRuntimeType;
+use std::ops::{Deref, DerefMut};
 
 pub struct LuaRuntimeFieldType(RuntimeFieldType);
 
@@ -27,7 +27,7 @@ impl From<RuntimeFieldType> for LuaRuntimeFieldType {
 }
 
 impl LuaUserData for LuaRuntimeFieldType {
-    fn add_fields<'lua, F: UserDataFields<'lua, Self>>(fields: &mut F) {
+    fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
         fields.add_field_method_get("singular", |_, this| {
             if let RuntimeFieldType::Singular(ty) = this.deref() {
                 let ty: LuaRuntimeType = From::from(ty.clone());

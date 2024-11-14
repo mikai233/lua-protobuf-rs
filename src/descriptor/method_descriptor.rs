@@ -1,9 +1,9 @@
-use std::ops::{Deref, DerefMut};
+use crate::descriptor::message_descriptor::LuaMessageDescriptor;
+use crate::descriptor_proto::method_descriptor_proto::LuaMethodDescriptorProto;
 use mlua::prelude::LuaUserData;
 use mlua::UserDataMethods;
 use protobuf::reflect::MethodDescriptor;
-use crate::descriptor::message_descriptor::LuaMessageDescriptor;
-use crate::descriptor_proto::method_descriptor_proto::LuaMethodDescriptorProto;
+use std::ops::{Deref, DerefMut};
 
 pub struct LuaMethodDescriptor(MethodDescriptor);
 
@@ -28,7 +28,7 @@ impl From<MethodDescriptor> for LuaMethodDescriptor {
 }
 
 impl LuaUserData for LuaMethodDescriptor {
-    fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
+    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("proto", |_, this, ()| {
             let proto: LuaMethodDescriptorProto = this.proto().clone().into();
             Ok(proto)

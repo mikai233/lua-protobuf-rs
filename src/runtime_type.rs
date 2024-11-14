@@ -1,9 +1,9 @@
-use std::ops::{Deref, DerefMut};
+use crate::descriptor::enum_descriptor::LuaEnumDescriptor;
+use crate::descriptor::message_descriptor::LuaMessageDescriptor;
 use mlua::prelude::LuaUserData;
 use mlua::UserDataFields;
 use protobuf::reflect::RuntimeType;
-use crate::descriptor::enum_descriptor::LuaEnumDescriptor;
-use crate::descriptor::message_descriptor::LuaMessageDescriptor;
+use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct LuaRuntimeType(RuntimeType);
@@ -29,7 +29,7 @@ impl From<RuntimeType> for LuaRuntimeType {
 }
 
 impl LuaUserData for LuaRuntimeType {
-    fn add_fields<'lua, F: UserDataFields<'lua, Self>>(fields: &mut F) {
+    fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
         fields.add_field_method_get("i32", |_, this| {
             if let RuntimeType::I32 = this.deref() {
                 Ok(Some("i32".to_string()))
@@ -111,4 +111,3 @@ impl LuaUserData for LuaRuntimeType {
         });
     }
 }
-

@@ -1,7 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
-use mlua::{ExternalError, UserDataMethods};
 use mlua::prelude::LuaUserData;
+use mlua::{ExternalError, UserDataMethods};
 use protobuf::reflect::{FileDescriptor, Syntax};
 
 use crate::descriptor::enum_descriptor::LuaEnumDescriptor;
@@ -40,17 +40,13 @@ impl Into<FileDescriptor> for LuaFileDescriptor {
 }
 
 impl LuaUserData for LuaFileDescriptor {
-    fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
-        methods.add_method("name", |_, this, ()| {
-            Ok(this.name().to_string())
-        });
-        methods.add_method("package", |_, this, ()| {
-            Ok(this.package().to_string())
-        });
+    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("name", |_, this, ()| Ok(this.name().to_string()));
+        methods.add_method("package", |_, this, ()| Ok(this.package().to_string()));
         methods.add_method("syntax", |_, this, ()| {
             let syntax = match this.syntax() {
-                Syntax::Proto2 => { "proto2" }
-                Syntax::Proto3 => { "proto3" }
+                Syntax::Proto2 => "proto2",
+                Syntax::Proto3 => "proto3",
             };
             Ok(syntax.to_string())
         });
@@ -70,42 +66,76 @@ impl LuaUserData for LuaFileDescriptor {
             let descriptors: Vec<LuaFieldDescriptor> = this.extensions().map(From::from).collect();
             Ok(descriptors)
         });
-        methods.add_method("message_by_package_relative_name", |_, this, name: String| {
-            let descriptor: Option<LuaMessageDescriptor> = this.message_by_package_relative_name(name.as_str()).map(From::from);
-            Ok(descriptor)
-        });
+        methods.add_method(
+            "message_by_package_relative_name",
+            |_, this, name: String| {
+                let descriptor: Option<LuaMessageDescriptor> = this
+                    .message_by_package_relative_name(name.as_str())
+                    .map(From::from);
+                Ok(descriptor)
+            },
+        );
         methods.add_method("enum_by_package_relative_name", |_, this, name: String| {
-            let descriptor: Option<LuaEnumDescriptor> = this.enum_by_package_relative_name(name.as_str()).map(From::from);
+            let descriptor: Option<LuaEnumDescriptor> = this
+                .enum_by_package_relative_name(name.as_str())
+                .map(From::from);
             Ok(descriptor)
         });
         methods.add_method("message_by_full_name", |_, this, name: String| {
-            let descriptor: Option<LuaMessageDescriptor> = this.message_by_full_name(name.as_str()).map(From::from);
+            let descriptor: Option<LuaMessageDescriptor> =
+                this.message_by_full_name(name.as_str()).map(From::from);
             Ok(descriptor)
         });
         methods.add_method("enum_by_full_name", |_, this, name: String| {
-            let descriptor: Option<LuaEnumDescriptor> = this.enum_by_full_name(name.as_str()).map(From::from);
+            let descriptor: Option<LuaEnumDescriptor> =
+                this.enum_by_full_name(name.as_str()).map(From::from);
             Ok(descriptor)
         });
-        methods.add_function("new_dynamic", |_, (proto, dependencies): (LuaFileDescriptorProto, Vec<LuaFileDescriptor>)| {
-            let descriptor: LuaFileDescriptor = FileDescriptor::new_dynamic(
-                proto.into(),
-                dependencies.into_iter().map(Into::into).collect::<Vec<FileDescriptor>>().as_slice())
-                .map_err(|e| e.into_lua_err())?.into();
-            Ok(descriptor)
-        });
-        methods.add_function("new_dynamic_fds", |_, (protos, dependencies): (Vec<LuaFileDescriptorProto>, Vec<LuaFileDescriptor>)| {
-            let descriptors: Vec<LuaFileDescriptor> = FileDescriptor::new_dynamic_fds(
-                protos.into_iter().map(Into::into).collect(),
-                dependencies.into_iter().map(Into::into).collect::<Vec<FileDescriptor>>().as_slice())
-                .map_err(|e| e.into_lua_err())?.into_iter().map(Into::into).collect();
-            Ok(descriptors)
-        });
+        methods.add_function(
+            "new_dynamic",
+            |_, (proto, dependencies): (LuaFileDescriptorProto, Vec<LuaFileDescriptor>)| {
+                let descriptor: LuaFileDescriptor = FileDescriptor::new_dynamic(
+                    proto.into(),
+                    dependencies
+                        .into_iter()
+                        .map(Into::into)
+                        .collect::<Vec<FileDescriptor>>()
+                        .as_slice(),
+                )
+                .map_err(|e| e.into_lua_err())?
+                .into();
+                Ok(descriptor)
+            },
+        );
+        methods.add_function(
+            "new_dynamic_fds",
+            |_, (protos, dependencies): (Vec<LuaFileDescriptorProto>, Vec<LuaFileDescriptor>)| {
+                let descriptors: Vec<LuaFileDescriptor> = FileDescriptor::new_dynamic_fds(
+                    protos.into_iter().map(Into::into).collect(),
+                    dependencies
+                        .into_iter()
+                        .map(Into::into)
+                        .collect::<Vec<FileDescriptor>>()
+                        .as_slice(),
+                )
+                .map_err(|e| e.into_lua_err())?
+                .into_iter()
+                .map(Into::into)
+                .collect();
+                Ok(descriptors)
+            },
+        );
         methods.add_method("proto", |_, this, ()| {
             let proto: LuaFileDescriptorProto = this.proto().clone().into();
             Ok(proto)
         });
         methods.add_method("deps", |_, this, ()| {
-            let descriptors: Vec<LuaFileDescriptor> = this.deps().iter().map(Clone::clone).map(From::from).collect();
+            let descriptors: Vec<LuaFileDescriptor> = this
+                .deps()
+                .iter()
+                .map(Clone::clone)
+                .map(From::from)
+                .collect();
             Ok(descriptors)
         });
         methods.add_method("public_deps", |_, this, ()| {

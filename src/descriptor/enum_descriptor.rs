@@ -1,7 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
-use mlua::UserDataMethods;
 use mlua::prelude::LuaUserData;
+use mlua::UserDataMethods;
 use protobuf::reflect::EnumDescriptor;
 
 use crate::descriptor::enum_value_descriptor::LuaEnumValueDescriptor;
@@ -31,18 +31,15 @@ impl From<EnumDescriptor> for LuaEnumDescriptor {
 }
 
 impl LuaUserData for LuaEnumDescriptor {
-    fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
-        methods.add_method("name", |_, this, ()| {
-            Ok(this.name().to_string())
-        });
-        methods.add_method("full_name", |_, this, ()| {
-            Ok(this.full_name().to_string())
-        });
+    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("name", |_, this, ()| Ok(this.name().to_string()));
+        methods.add_method("full_name", |_, this, ()| Ok(this.full_name().to_string()));
         methods.add_method("name_to_package", |_, this, ()| {
             Ok(this.name_to_package().to_string())
         });
         methods.add_method("enclosing_message", |_, this, ()| {
-            let enclosing_message: Option<LuaMessageDescriptor> = this.enclosing_message().map(From::from);
+            let enclosing_message: Option<LuaMessageDescriptor> =
+                this.enclosing_message().map(From::from);
             Ok(enclosing_message)
         });
         methods.add_method("values", |_, this, ()| {
@@ -50,11 +47,13 @@ impl LuaUserData for LuaEnumDescriptor {
             Ok(values)
         });
         methods.add_method("value_by_name", |_, this, name: String| {
-            let descriptor: Option<LuaEnumValueDescriptor> = this.value_by_name(name.as_str()).map(From::from);
+            let descriptor: Option<LuaEnumValueDescriptor> =
+                this.value_by_name(name.as_str()).map(From::from);
             Ok(descriptor)
         });
         methods.add_method("value_by_number", |_, this, number: i32| {
-            let descriptor: Option<LuaEnumValueDescriptor> = this.value_by_number(number).map(From::from);
+            let descriptor: Option<LuaEnumValueDescriptor> =
+                this.value_by_number(number).map(From::from);
             Ok(descriptor)
         });
         methods.add_method("value_by_index", |_, this, index: usize| {

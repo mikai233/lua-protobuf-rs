@@ -1,7 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
-use mlua::{ErrorContext, ExternalError, Table, UserDataMethods};
 use mlua::prelude::LuaUserData;
+use mlua::{ErrorContext, ExternalError, Table, UserDataMethods};
 use protobuf::reflect::MessageDescriptor;
 
 use crate::codec::LuaProtoCodec;
@@ -36,24 +36,25 @@ impl From<MessageDescriptor> for LuaMessageDescriptor {
 }
 
 impl LuaUserData for LuaMessageDescriptor {
-    fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
+    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("proto", |_, this, ()| {
             let proto: LuaDescriptorProto = this.proto().clone().into();
             Ok(proto)
         });
-        methods.add_method("name", |_, this, ()| {
-            Ok(this.name().to_string())
-        });
+        methods.add_method("name", |_, this, ()| Ok(this.name().to_string()));
         methods.add_method("nested_messages", |_, this, ()| {
-            let nested_messages: Vec<LuaMessageDescriptor> = this.nested_messages().map(From::from).collect();
+            let nested_messages: Vec<LuaMessageDescriptor> =
+                this.nested_messages().map(From::from).collect();
             Ok(nested_messages)
         });
         methods.add_method("nested_enums", |_, this, ()| {
-            let nested_enums: Vec<LuaEnumDescriptor> = this.nested_enums().map(From::from).collect();
+            let nested_enums: Vec<LuaEnumDescriptor> =
+                this.nested_enums().map(From::from).collect();
             Ok(nested_enums)
         });
         methods.add_method("enclosing_message", |_, this, ()| {
-            let enclosing_message: Option<LuaMessageDescriptor> = this.enclosing_message().map(From::from);
+            let enclosing_message: Option<LuaMessageDescriptor> =
+                this.enclosing_message().map(From::from);
             Ok(enclosing_message)
         });
         methods.add_method("file_descriptor", |_, this, ()| {
@@ -64,12 +65,8 @@ impl LuaUserData for LuaMessageDescriptor {
             let proto: LuaFileDescriptorProto = this.file_descriptor_proto().clone().into();
             Ok(proto)
         });
-        methods.add_method("is_map_entry", |_, this, ()| {
-            Ok(this.is_map_entry())
-        });
-        methods.add_method("full_name", |_, this, ()| {
-            Ok(this.full_name().to_string())
-        });
+        methods.add_method("is_map_entry", |_, this, ()| Ok(this.is_map_entry()));
+        methods.add_method("full_name", |_, this, ()| Ok(this.full_name().to_string()));
         methods.add_method("name_to_package", |_, this, ()| {
             Ok(this.name_to_package().to_string())
         });
@@ -82,7 +79,8 @@ impl LuaUserData for LuaMessageDescriptor {
             Ok(oneofs)
         });
         methods.add_method("oneof_by_name", |_, this, name: String| {
-            let descriptor: Option<LuaOneofDescriptor> = this.oneof_by_name(name.as_str()).map(From::from);
+            let descriptor: Option<LuaOneofDescriptor> =
+                this.oneof_by_name(name.as_str()).map(From::from);
             Ok(descriptor)
         });
         methods.add_method("fields", |_, this, ()| {
@@ -94,15 +92,19 @@ impl LuaUserData for LuaMessageDescriptor {
             Ok(extensions)
         });
         methods.add_method("field_by_name", |_, this, name: String| {
-            let field_descriptor: Option<LuaFieldDescriptor> = this.field_by_name(name.as_str()).map(From::from);
+            let field_descriptor: Option<LuaFieldDescriptor> =
+                this.field_by_name(name.as_str()).map(From::from);
             Ok(field_descriptor)
         });
         methods.add_method("field_by_name_or_json_name", |_, this, name: String| {
-            let field_descriptor: Option<LuaFieldDescriptor> = this.field_by_name_or_json_name(name.as_str()).map(From::from);
+            let field_descriptor: Option<LuaFieldDescriptor> = this
+                .field_by_name_or_json_name(name.as_str())
+                .map(From::from);
             Ok(field_descriptor)
         });
         methods.add_method("field_by_number", |_, this, number: u32| {
-            let field_descriptor: Option<LuaFieldDescriptor> = this.field_by_number(number).map(From::from);
+            let field_descriptor: Option<LuaFieldDescriptor> =
+                this.field_by_number(number).map(From::from);
             Ok(field_descriptor)
         });
         methods.add_method("parse_from_bytes", |lua, this, bytes_table: Table| {
@@ -111,9 +113,13 @@ impl LuaUserData for LuaMessageDescriptor {
             for byte in bytes_table.sequence_values::<u8>() {
                 bytes.push(byte.context("expect u8 in table, found other type")?);
             }
-            let message = this.parse_from_bytes(bytes.as_slice()).map_err(|e| e.into_lua_err())?;
+            let message = this
+                .parse_from_bytes(bytes.as_slice())
+                .map_err(|e| e.into_lua_err())?;
             let codec = LuaProtoCodec::default();
-            let message = codec.decode_message(message.as_ref(), lua).map_err(|e| e.into_lua_err())?;
+            let message = codec
+                .decode_message(message.as_ref(), lua)
+                .map_err(|e| e.into_lua_err())?;
             Ok(message)
         });
     }
