@@ -1,31 +1,12 @@
 use crate::descriptor::message_descriptor::LuaMessageDescriptor;
 use crate::descriptor_proto::method_descriptor_proto::LuaMethodDescriptorProto;
+use derive_more::{ Deref, From, Into};
 use mlua::prelude::LuaUserData;
 use mlua::UserDataMethods;
 use protobuf::reflect::MethodDescriptor;
-use std::ops::{Deref, DerefMut};
 
-pub struct LuaMethodDescriptor(MethodDescriptor);
-
-impl Deref for LuaMethodDescriptor {
-    type Target = MethodDescriptor;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for LuaMethodDescriptor {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl From<MethodDescriptor> for LuaMethodDescriptor {
-    fn from(value: MethodDescriptor) -> Self {
-        LuaMethodDescriptor(value)
-    }
-}
+#[derive( Deref, From, Into)]
+pub struct LuaMethodDescriptor(pub MethodDescriptor);
 
 impl LuaUserData for LuaMethodDescriptor {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
@@ -33,10 +14,12 @@ impl LuaUserData for LuaMethodDescriptor {
             let proto: LuaMethodDescriptorProto = this.proto().clone().into();
             Ok(proto)
         });
+        
         methods.add_method("input_type", |_, this, ()| {
             let descriptor: LuaMessageDescriptor = this.input_type().into();
             Ok(descriptor)
         });
+        
         methods.add_method("input_type", |_, this, ()| {
             let descriptor: LuaMessageDescriptor = this.output_type().into();
             Ok(descriptor)

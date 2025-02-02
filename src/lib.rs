@@ -1,5 +1,5 @@
-use mlua::Lua;
 use mlua::prelude::{LuaAnyUserData, LuaResult};
+use mlua::Lua;
 
 use crate::protoc::LuaProtoc;
 
@@ -9,6 +9,12 @@ pub mod runtime_type;
 pub mod runtime_field_type;
 pub mod descriptor;
 pub mod descriptor_proto;
+mod message_dyn;
+mod reflect_value_box;
+mod syntax;
+mod message_macros;
+mod message_dyn_macros;
+mod message_full_macros;
 
 #[cfg(feature = "default")]
 #[mlua::lua_module]

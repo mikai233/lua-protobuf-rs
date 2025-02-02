@@ -1,32 +1,12 @@
 use crate::descriptor::method_descriptor::LuaMethodDescriptor;
 use crate::descriptor_proto::service_descriptor_proto::LuaServiceDescriptorProto;
+use derive_more::{Deref, From, Into};
 use mlua::prelude::LuaUserData;
 use mlua::UserDataMethods;
 use protobuf::reflect::ServiceDescriptor;
-use std::ops::{Deref, DerefMut};
 
-#[derive(Clone, Eq, PartialEq)]
-pub struct LuaServiceDescriptor(ServiceDescriptor);
-
-impl Deref for LuaServiceDescriptor {
-    type Target = ServiceDescriptor;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for LuaServiceDescriptor {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl From<ServiceDescriptor> for LuaServiceDescriptor {
-    fn from(value: ServiceDescriptor) -> Self {
-        LuaServiceDescriptor(value)
-    }
-}
+#[derive(Clone, Eq, PartialEq, Deref, From, Into)]
+pub struct LuaServiceDescriptor(pub ServiceDescriptor);
 
 impl LuaUserData for LuaServiceDescriptor {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
@@ -34,6 +14,7 @@ impl LuaUserData for LuaServiceDescriptor {
             let proto: LuaServiceDescriptorProto = this.proto().clone().into();
             Ok(proto)
         });
+        
         methods.add_method("methods", |_, this, ()| {
             let methods: Vec<LuaMethodDescriptor> = this.methods().map(From::from).collect();
             Ok(methods)

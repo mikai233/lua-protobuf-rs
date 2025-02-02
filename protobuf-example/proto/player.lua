@@ -3,4 +3,4 @@
 ---@field world_id number
 ---@field nickname string
 ---@field exp number
-local Player
+local Player = { }

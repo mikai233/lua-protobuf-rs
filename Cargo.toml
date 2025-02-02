@@ -1,6 +1,6 @@
 [package]
 name = "lua-protobuf-rs"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 authors = ["mikai233"]
 description = "lua protobuf"
@@ -21,27 +21,24 @@ codegen-units = 1
 panic = "abort"
 
 [features]
-default = ["lua54", "module"]
+default = ["lua54", "module", "mlua/anyhow"]
 lua54 = ["mlua/lua54"]
 lua53 = ["mlua/lua53"]
 lua52 = ["mlua/lua52"]
 lua51 = ["mlua/lua51"]
 luajit = ["mlua/luajit"]
+luajit52 = ["mlua/luajit52"]
+luau = ["mlua/luau"]
 module = ["mlua/module"]
 google_protoc = []
 vendored_protoc = ["protoc-bin-vendored"]
 
 [dependencies]
-mlua = { version = "0.10.1", features = ["macros", "anyhow"] }
-derive_more = { version = "1.0.0", features = [
-    "deref",
-    "deref_mut",
-    "from",
-    "into",
-] }
-anyhow = "1.0.83"
+mlua = { version = "0.10.3", features = ["macros", "anyhow"] }
+anyhow = "1.0.95"
 walkdir = "2.5.0"
-tempfile = "3.10.1"
-protobuf = "3.4.0"
-protobuf-parse = "3.4.0"
-protoc-bin-vendored = { version = "3.0.0", optional = true }
+tempfile = "3.16.0"
+protobuf = "3.7.1"
+protobuf-parse = "3.7.1"
+protoc-bin-vendored = { version = "3.1.0", optional = true }
+derive_more = { version = "1.0.0", features = ["deref", "deref_mut", "debug", "from", "into"] }

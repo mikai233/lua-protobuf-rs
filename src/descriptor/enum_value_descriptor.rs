@@ -1,39 +1,41 @@
 use crate::descriptor::enum_descriptor::LuaEnumDescriptor;
+use crate::descriptor_proto::enum_value_descriptor_proto::LuaEnumValueDescriptorProto;
+use derive_more::{Deref, From, Into};
 use mlua::prelude::LuaUserData;
-use mlua::UserDataMethods;
+use mlua::{MetaMethod, UserDataMethods};
 use protobuf::reflect::EnumValueDescriptor;
-use std::ops::{Deref, DerefMut};
 
-pub struct LuaEnumValueDescriptor(EnumValueDescriptor);
-
-impl Deref for LuaEnumValueDescriptor {
-    type Target = EnumValueDescriptor;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for LuaEnumValueDescriptor {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl From<EnumValueDescriptor> for LuaEnumValueDescriptor {
-    fn from(value: EnumValueDescriptor) -> Self {
-        LuaEnumValueDescriptor(value)
-    }
-}
+#[derive(Clone, Eq, PartialEq, Hash, Deref, From, Into)]
+pub struct LuaEnumValueDescriptor(pub EnumValueDescriptor);
 
 impl LuaUserData for LuaEnumValueDescriptor {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("name", |_, this, ()| Ok(this.name().to_string()));
-        methods.add_method("full_name", |_, this, ()| Ok(this.full_name().to_string()));
-        methods.add_method("value", |_, this, ()| Ok(this.value()));
-        methods.add_method("enum_descriptor", |_, this, ()| {
-            let descriptor: LuaEnumDescriptor = this.enum_descriptor().clone().into();
-            Ok(descriptor)
+        methods.add_method(MetaMethod::ToString, |_, this, ()| {
+            Ok(this.to_string())
         });
+
+        methods.add_method("proto", |_, this, ()| {
+            Ok::<LuaEnumValueDescriptorProto, _>(this.proto().clone().into())
+        });
+
+        methods.add_method("name", |_, this, ()| {
+            Ok(this.name().to_string())
+        });
+
+        methods.add_method("full_name", |_, this, ()| {
+            Ok(this.full_name())
+        });
+
+        methods.add_method("value", |_, this, ()| {
+            Ok(this.value())
+        });
+
+        methods.add_method("enum_descriptor", |_, this, ()| {
+            Ok(LuaEnumDescriptor(this.enum_descriptor().clone()))
+        });
+
+        // methods.add_method("cast", |_, this, ()| {
+        //     Ok(this.cast::<E>())
+        // });
     }
 }
