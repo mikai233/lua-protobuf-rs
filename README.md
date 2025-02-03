@@ -4,9 +4,7 @@
 
 可以做到在运行时加载proto文件，将protobuf二进制数据解析成lua table、将lua table编码成二进制数据以及protobuf在lua下的反射功能
 
-绑定的API可以到[这里](https://docs.rs/protobuf/latest/protobuf/)
-查看，绑定了几个比较关键的struct， `FileDescriptor` `MessageDescriptor`
-`FieldDescriptor` `EnumDescriptor`，这几个结构其实就表示了proto的文件、消息、以及字段、枚举的信息
+绑定的API可以到[这里](https://docs.rs/protobuf/latest/protobuf/)查看，几乎绑定了所有的API
 
 # 使用
 
