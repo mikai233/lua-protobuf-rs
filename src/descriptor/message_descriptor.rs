@@ -1,6 +1,7 @@
+use anyhow::anyhow;
 use derive_more::{Deref, From, Into};
 use mlua::prelude::LuaUserData;
-use mlua::{AnyUserData, ErrorContext, ExternalError, MetaMethod, Table, UserDataMethods};
+use mlua::{AnyUserData, ErrorContext, MetaMethod, Table, UserDataMethods};
 use protobuf::reflect::MessageDescriptor;
 
 use crate::codec::LuaProtoCodec;
@@ -150,9 +151,9 @@ impl LuaUserData for LuaMessageDescriptor {
             for byte in bytes_table.sequence_values::<u8>() {
                 bytes.push(byte.context("expect u8 in table, found other type")?);
             }
-            let message = this.parse_from_bytes(bytes.as_slice()).map_err(|e| e.into_lua_err())?;
+            let message = this.parse_from_bytes(bytes.as_slice()).map_err(|e| anyhow!(e))?;
             let codec = LuaProtoCodec::default();
-            let message = codec.decode_message(message.as_ref(), lua).map_err(|e| e.into_lua_err())?;
+            let message = codec.decode_message(lua, message.as_ref())?;
             Ok(message)
         });
     }

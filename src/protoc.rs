@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context};
 use mlua::prelude::LuaUserData;
-use mlua::{ErrorContext, ExternalError, Lua, Table, UserDataMethods};
+use mlua::{Lua, Table, UserDataMethods};
 use protobuf::descriptor::FileDescriptorProto;
 use protobuf::reflect::{EnumDescriptor, FileDescriptor, MessageDescriptor, RuntimeFieldType, RuntimeType};
 use protobuf::{CodedInputStream, Message, MessageDyn};
@@ -265,8 +265,8 @@ impl LuaProtoc {
     }
 
 
-    pub fn encode(&self, message_full_name: String, lua_message: Table) -> anyhow::Result<Box<dyn MessageDyn>> {
-        let descriptor = self.message_descriptors.get(&message_full_name).ok_or(anyhow!("{} not found",message_full_name))?;
+    pub fn encode(&self, message_full_name: &str, lua_message: &Table) -> anyhow::Result<Box<dyn MessageDyn>> {
+        let descriptor = self.message_descriptors.get(message_full_name).ok_or(anyhow!("{} not found",message_full_name))?;
         let message = self.codec.encode_message(lua_message, descriptor)?;
         Ok(message)
     }
@@ -274,7 +274,7 @@ impl LuaProtoc {
     pub fn decode(&self, lua: &Lua, message_full_name: String, message_bytes: &[u8]) -> anyhow::Result<Table> {
         let descriptor = self.message_descriptors.get(&message_full_name).ok_or(anyhow!("{} not found",message_full_name))?;
         let message = descriptor.parse_from_bytes(message_bytes)?;
-        let lua_message = self.codec.decode_message(message.as_ref(), lua)?;
+        let lua_message = self.codec.decode_message(lua, message.as_ref())?;
         Ok(lua_message)
     }
 
@@ -296,72 +296,77 @@ impl LuaUserData for LuaProtoc {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
         methods.add_function("parse_files", |_, (inputs, includes): (Vec<String>, Vec<String>)| {
             if inputs.is_empty() {
-                return Err(anyhow!("inputs mut not empty").into_lua_err());
+                return Err(anyhow!("inputs must not empty").into());
             }
             if includes.is_empty() {
-                return Err(anyhow!("includes mut not empty").into_lua_err());
+                return Err(anyhow!("includes must not empty").into());
             }
-            let protoc = LuaProtoc::parse_files(inputs, includes).map_err(|e| e.into_lua_err())?;
+            let protoc = LuaProtoc::parse_files(inputs, includes).map_err(|e| anyhow!("{e:?}"))?;
             Ok(protoc)
         });
+
         methods.add_function("parse_proto", |_, proto: String| {
-            let protoc = LuaProtoc::parse_proto(proto).map_err(|e| e.into_lua_err())?;
+            let protoc = LuaProtoc::parse_proto(proto).map_err(|e| anyhow!("{e:?}"))?;
             Ok(protoc)
         });
+
         methods.add_function("parse_pb", |_, dir: String| {
-            let protoc = LuaProtoc::parse_pb(dir).map_err(|e| e.into_lua_err())?;
+            let protoc = LuaProtoc::parse_pb(dir).map_err(|e| anyhow!("{e:?}"))?;
             Ok(protoc)
         });
+
         methods.add_method("gen_pb", |_, this, path: String| {
-            this.gen_pb(path).map_err(|e| e.into_lua_err())?;
+            this.gen_pb(path).map_err(|e| anyhow!("{e:?}"))?;
             Ok(())
         });
+
         methods.add_method("gen_lua", |_, this, path: String| {
-            this.gen_lua(path).map_err(|e| e.into_lua_err())?;
+            this.gen_lua(path).map_err(|e| anyhow!("{e:?}"))?;
             Ok(())
         });
+
         methods.add_method("encode", |_, protoc, (message_full_name, lua_message): (String, Table)| {
-            let ctx = format!("encode message {} failed", message_full_name);
-            let message = protoc
-                .encode(message_full_name, lua_message)
-                .map_err(|e| e.into_lua_err());
-            let message = ErrorContext::context(message, ctx)?;
+            let message = protoc.encode(&message_full_name, &lua_message).map_err(|e| anyhow!("{e:?}"))?;
             let mut message_bytes = Vec::with_capacity(message.compute_size_dyn() as usize);
-            message.write_to_vec_dyn(&mut message_bytes).map_err(|e| e.into_lua_err())?;
+            message.write_to_vec_dyn(&mut message_bytes).map_err(|e| anyhow!("{e:?}"))?;
             Ok(message_bytes)
         });
+
         methods.add_method("decode", |lua, protoc, (message_full_name, message_bytes): (String, Vec<u8>)| {
-            let ctx = format!("decode message {} failed", message_full_name);
-            let message = protoc
-                .decode(lua, message_full_name, message_bytes.as_ref())
-                .map_err(|e| e.into_lua_err());
-            let message = ErrorContext::context(message, ctx)?;
+            let message = protoc.decode(lua, message_full_name, message_bytes.as_ref()).map_err(|e| anyhow!("{e:?}"))?;
             Ok(message)
         });
+
         methods.add_function("list_protos", |_, paths: Vec<String>| {
             let protos = LuaProtoc::list_protos(paths).iter().map(|p| { p.to_string_lossy().to_string() }).collect::<Vec<String>>();
             Ok(protos)
         });
+
         methods.add_method("all_file_descriptors", |_, protoc, ()| {
             let descriptors: Vec<_> = protoc.file_descriptors.values().map(Clone::clone).collect();
             Ok(descriptors)
         });
+
         methods.add_method("file_descriptor_by_name", |_, protoc, name: String| {
             let descriptor = protoc.file_descriptors.get(&name).map(Clone::clone);
             Ok(descriptor)
         });
+
         methods.add_method("all_message_descriptors", |_, protoc, ()| {
             let descriptors: Vec<_> = protoc.message_descriptors.values().map(Clone::clone).collect();
             Ok(descriptors)
         });
+
         methods.add_method("message_descriptor_by_name", |_, protoc, name: String| {
             let descriptor = protoc.message_descriptors.get(&name).map(Clone::clone);
             Ok(descriptor)
         });
+
         methods.add_method("all_enum_descriptors", |_, protoc, ()| {
             let descriptors: Vec<_> = protoc.enum_descriptors.values().map(Clone::clone).collect();
             Ok(descriptors)
         });
+
         methods.add_method("enum_descriptor_by_name", |_, protoc, name: String| {
             let descriptor = protoc.enum_descriptors.get(&name).map(Clone::clone);
             Ok(descriptor)

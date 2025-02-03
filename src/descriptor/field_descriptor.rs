@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use derive_more::{Deref, From, Into};
 use mlua::prelude::LuaUserData;
-use mlua::{AnyUserData, ExternalError, MetaMethod, UserDataMethods};
+use mlua::{AnyUserData, MetaMethod, UserDataMethods};
 use protobuf::reflect::FieldDescriptor;
 
 use crate::descriptor::message_descriptor::LuaMessageDescriptor;
@@ -100,7 +100,7 @@ impl LuaUserData for LuaFieldDescriptor {
                 let ty: LuaRuntimeType = this.singular_runtime_type().into();
                 Ok(ty)
             } else {
-                Err(anyhow!("{} is not singular",this.full_name()).into_lua_err())
+                Err(anyhow!("{} is not singular",this.full_name()).into())
             }
         });
         methods.add_method("runtime_field_type", |_, this, ()| {
