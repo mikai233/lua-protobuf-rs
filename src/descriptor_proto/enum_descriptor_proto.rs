@@ -2,7 +2,7 @@ use crate::descriptor_proto::enum_options::LuaEnumOptions;
 use crate::descriptor_proto::enum_reserved_range::LuaEnumReservedRange;
 use crate::descriptor_proto::enum_value_descriptor_proto::LuaEnumValueDescriptorProto;
 use crate::{add_message_dyn_trait_method, add_message_full_trait_method, add_message_trait_method};
-use derive_more::{Deref, DerefMut, From, Into};
+use derive_more::{Deref, DerefMut, From};
 use mlua::prelude::LuaUserData;
 use mlua::{MetaMethod, UserDataFields, UserDataMethods};
 use protobuf::descriptor::EnumDescriptorProto;

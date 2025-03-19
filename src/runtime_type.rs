@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use crate::descriptor::enum_descriptor::LuaEnumDescriptor;
 use crate::descriptor::message_descriptor::LuaMessageDescriptor;
 use derive_more::{Deref, From, Into};
