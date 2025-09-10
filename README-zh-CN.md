@@ -1,24 +1,14 @@
 # lua-protobuf-rs
 
-Available languages: [English](README.md) | [中文](README-zh-CN.md)
+此项目使用的是rust的[protobuf](https://github.com/stepancheg/rust-protobuf)实现，编写的可以在lua中解析protobuf的库
 
-This project provides a Lua library for parsing Protobuf, built on top of
-Rust’s [protobuf](https://github.com/stepancheg/rust-protobuf) implementation.
+可以做到在运行时加载proto文件，将protobuf二进制数据解析成lua table、将lua table编码成二进制数据以及protobuf在lua下的反射功能
 
-It allows you to:
+绑定的API可以到[这里](https://docs.rs/protobuf/latest/protobuf/)查看，几乎绑定了所有的API
 
-- Load `.proto` files at runtime
-- Parse Protobuf binary data into Lua tables
-- Encode Lua tables into Protobuf binary data
-- Use Protobuf reflection features in Lua
+# 使用
 
-The bound APIs can be found [here](https://docs.rs/protobuf/latest/protobuf/), and almost all APIs are exposed.
-
----
-
-# Usage
-
-## Parse proto directly in Lua
+## lua里直接解析proto
 
 ```lua
 --- @type LuaProtoc
@@ -63,7 +53,7 @@ local decode_login_response = protoc:decode("LoginResponse", login_response_byte
 print(decode_login_response.player.id)
 ```
 
-# Parse proto files in Lua
+## lua里解析proto文件
 
 - player.proto
 
@@ -122,9 +112,9 @@ local decode_login_response = protoc:decode("com.mikai233.LoginResponse", login_
 print(decode_login_response.player.id)
 ```
 
-# Reflection
+## 反射
 
-For more reflection APIs, please refer to the documentation.
+更多的反射API请查看文档
 
 ```lua
 --- @type LuaProtoc
@@ -153,11 +143,11 @@ for _, field in pairs(login_response_descriptor:fields()) do
 end
 ```
 
-# Proto code hints
+## proto代码提示
 
-You can use `gen_lua` to generate Lua proto template files for better development experience.
-This project uses annotations based on the [EmmyLua](https://github.com/EmmyLua/IntelliJ-EmmyLua)
-plugin.
+可以使用`gen_lua`
+来生成lua的proto模板文件，来获得更好的代码编写体验，本项目是基于[EmmyLua](https://github.com/EmmyLua/IntelliJ-EmmyLua)
+插件做的注解提示
 
 ```lua
 ---@class LoginRequest
@@ -170,11 +160,10 @@ local LoginRequest
 local LoginResponse
 ```
 
-# xLua integration
+# xLua插件集成
 
-Set the environment variables `LUA_LIB_NAME` and `LUA_LIB` to point to the xLua header directory and library name, then
-recompile this project.
-⚠️ Make sure the xLua version matches the Lua version used in this project.
+设置环境变量 `LUA_LIB_NAME` `LUA_LIB`为xlua的头文件目录以及xlua的库名，然后重新编译此项目即可
+注意xlua的版本一定要和此项目的lua版本要对应
 
 ```csharp
 [DllImport("lua_protobuf_rs", CallingConvention = CallingConvention.Cdecl)]
@@ -187,31 +176,20 @@ public static int LoadProtobufRs(System.IntPtr L)
 }
 ```
 
-# Build
+# 编译
 
-Thanks to Cargo, building is very simple. Just install Rust, then run:
+得益于Cargo，编译变得非常简单，只需要安装Rust，然后执行`cargo build --release`就可以得到当前平台的库文件
 
-```shell
-cargo build --release
-```
+对于不同的Lua版本，只需要修改`Cargo.toml`中的`default`字段重新编译即可
 
-to get the library file for the current platform.
+## 交叉编译
 
-For different Lua versions, modify the `default` field in `Cargo.toml` and rebuild.
+如果需要编译到不同平台，可以使用[交叉编译](https://github.com/cross-rs/cross)，需要Docker，操作难度很小
 
-# Cross-compilation
+- 编译到Linux：`cross build --target x86_64-unknown-linux-gnu --release`
+- 编译到Android `cross build --target armv7-linux-androideabi --release`
 
-If you need to build for other platforms, you can use [cross-rs](https://github.com/cross-rs/cross) , which requires
-Docker but is very straightforward.
+# 注意事项
 
-- Build for Linux:
-  `cross build --target x86_64-unknown-linux-gnu --release`
-
-- Build for Android:
-  `cross build --target armv7-linux-androideabi --release`
-
-# Notes
-
-For non-`oneof` fields, when parsing binary messages into a Lua table, unset fields will get default values.
-For `oneof` fields, if no value is set, then *all fields will be absent*.
-That means: in a `oneof`, only one field can exist at a time, or none at all.
+对于非`oneof`类型的字段，在将二进制消息解析成table时，如果该字段没有设置值，都会给一个默认值，而对于`oneof`类型的字段，如果都没有设置过值，
+那么这些字段都将不存在，也就是说`oneof`的所有字段只可能存在一个或者都不存在
