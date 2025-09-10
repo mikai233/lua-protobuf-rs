@@ -1,7 +1,7 @@
 use crate::descriptor::message_descriptor::LuaMessageDescriptor;
 use derive_more::{Deref, From, Into};
-use mlua::prelude::LuaUserData;
 use mlua::UserDataMethods;
+use mlua::prelude::LuaUserData;
 use protobuf::MessageDyn;
 use std::fmt::{Display, Formatter};
 
@@ -20,9 +20,10 @@ impl LuaUserData for LuaMessageDyn {
             Ok(LuaMessageDescriptor(this.descriptor_dyn()))
         });
 
-        methods.add_method("compute_size_dyn", |_, this, ()| {
-            Ok(this.compute_size_dyn())
-        });
+        methods.add_method(
+            "compute_size_dyn",
+            |_, this, ()| Ok(this.compute_size_dyn()),
+        );
 
         methods.add_method("is_instance_dyn", |_, this, ()| {
             Ok(this.is_initialized_dyn())

@@ -10,25 +10,17 @@ pub struct LuaEnumValueDescriptor(pub EnumValueDescriptor);
 
 impl LuaUserData for LuaEnumValueDescriptor {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method(MetaMethod::ToString, |_, this, ()| {
-            Ok(this.to_string())
-        });
+        methods.add_method(MetaMethod::ToString, |_, this, ()| Ok(this.to_string()));
 
         methods.add_method("proto", |_, this, ()| {
             Ok::<LuaEnumValueDescriptorProto, _>(this.proto().clone().into())
         });
 
-        methods.add_method("name", |_, this, ()| {
-            Ok(this.name().to_string())
-        });
+        methods.add_method("name", |_, this, ()| Ok(this.name().to_string()));
 
-        methods.add_method("full_name", |_, this, ()| {
-            Ok(this.full_name())
-        });
+        methods.add_method("full_name", |_, this, ()| Ok(this.full_name()));
 
-        methods.add_method("value", |_, this, ()| {
-            Ok(this.value())
-        });
+        methods.add_method("value", |_, this, ()| Ok(this.value()));
 
         methods.add_method("enum_descriptor", |_, this, ()| {
             Ok(LuaEnumDescriptor(this.enum_descriptor().clone()))

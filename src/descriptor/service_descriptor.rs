@@ -1,8 +1,8 @@
 use crate::descriptor::method_descriptor::LuaMethodDescriptor;
 use crate::descriptor_proto::service_descriptor_proto::LuaServiceDescriptorProto;
 use derive_more::{Deref, From, Into};
-use mlua::prelude::LuaUserData;
 use mlua::UserDataMethods;
+use mlua::prelude::LuaUserData;
 use protobuf::reflect::ServiceDescriptor;
 
 #[derive(Clone, Eq, PartialEq, Deref, From, Into)]
@@ -14,7 +14,7 @@ impl LuaUserData for LuaServiceDescriptor {
             let proto: LuaServiceDescriptorProto = this.proto().clone().into();
             Ok(proto)
         });
-        
+
         methods.add_method("methods", |_, this, ()| {
             let methods: Vec<LuaMethodDescriptor> = this.methods().map(From::from).collect();
             Ok(methods)

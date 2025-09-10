@@ -90,7 +90,9 @@ impl LuaUserData for LuaReflectedValueBox {
         methods.add_method("get_enum", |lua, this, ()| {
             if let ReflectValueBox::Enum(e, i) = &this.0 {
                 let mut mv = mlua::MultiValue::new();
-                mv.push_back(mlua::Value::UserData(lua.create_any_userdata(LuaEnumDescriptor(e.clone()))?));
+                mv.push_back(mlua::Value::UserData(
+                    lua.create_any_userdata(LuaEnumDescriptor(e.clone()))?,
+                ));
                 mv.push_back(mlua::Value::Integer(Integer::from(*i)));
                 Ok(mv)
             } else {

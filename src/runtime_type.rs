@@ -1,10 +1,10 @@
-use std::ops::Deref;
 use crate::descriptor::enum_descriptor::LuaEnumDescriptor;
 use crate::descriptor::message_descriptor::LuaMessageDescriptor;
 use derive_more::{Deref, From, Into};
-use mlua::prelude::LuaUserData;
 use mlua::UserDataMethods;
+use mlua::prelude::LuaUserData;
 use protobuf::reflect::RuntimeType;
+use std::ops::Deref;
 
 #[derive(Debug, Clone, Eq, PartialEq, Deref, From, Into)]
 pub struct LuaRuntimeType(pub RuntimeType);

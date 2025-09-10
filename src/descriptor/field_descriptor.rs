@@ -17,28 +17,21 @@ pub struct LuaFieldDescriptor(pub FieldDescriptor);
 
 impl LuaUserData for LuaFieldDescriptor {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_meta_method(MetaMethod::ToString, |_, this, ()| {
-            Ok(this.to_string())
-        });
+        methods.add_meta_method(MetaMethod::ToString, |_, this, ()| Ok(this.to_string()));
 
         methods.add_method("proto", |_, this, ()| {
             Ok(LuaFieldDescriptorProto(this.proto().clone()))
         });
 
-        methods.add_method("name", |_, this, ()| {
-            Ok(this.name().to_string())
-        });
+        methods.add_method("name", |_, this, ()| Ok(this.name().to_string()));
 
-        methods.add_method("number", |_, this, ()| {
-            Ok(this.number())
-        });
+        methods.add_method("number", |_, this, ()| Ok(this.number()));
 
-        methods.add_method("full_name", |_, this, ()| {
-            Ok(this.full_name())
-        });
-        
+        methods.add_method("full_name", |_, this, ()| Ok(this.full_name()));
+
         methods.add_method("containing_oneof_including_synthetic", |_, this, ()| {
-            let descriptor: Option<LuaOneofDescriptor> = this.containing_oneof_including_synthetic().map(Into::into);
+            let descriptor: Option<LuaOneofDescriptor> =
+                this.containing_oneof_including_synthetic().map(Into::into);
             Ok(descriptor)
         });
 
@@ -52,29 +45,19 @@ impl LuaUserData for LuaFieldDescriptor {
             Ok(descriptor)
         });
 
-        methods.add_method("json_name", |_, this, ()| {
-            Ok(this.json_name().to_string())
-        });
+        methods.add_method("json_name", |_, this, ()| Ok(this.json_name().to_string()));
 
-        methods.add_method("is_singular", |_, this, ()| {
-            Ok(this.is_singular())
-        });
+        methods.add_method("is_singular", |_, this, ()| Ok(this.is_singular()));
 
-        methods.add_method("is_required", |_, this, ()| {
-            Ok(this.is_required())
-        });
-        
+        methods.add_method("is_required", |_, this, ()| Ok(this.is_required()));
+
         methods.add_method("is_repeated_or_map", |_, this, ()| {
             Ok(this.is_repeated_or_map())
         });
 
-        methods.add_method("is_repeated", |_, this, ()| {
-            Ok(this.is_repeated())
-        });
+        methods.add_method("is_repeated", |_, this, ()| Ok(this.is_repeated()));
 
-        methods.add_method("is_map", |_, this, ()| {
-            Ok(this.is_repeated())
-        });
+        methods.add_method("is_map", |_, this, ()| Ok(this.is_repeated()));
 
         methods.add_method("has_field", |_, this, m: AnyUserData| {
             let m = m.borrow::<LuaMessageDyn>()?;
@@ -93,14 +76,13 @@ impl LuaUserData for LuaFieldDescriptor {
         methods.add_method("singular_default_value", |_, this, ()| {
             Ok::<LuaReflectedValueBox, _>(this.singular_default_value().to_box().into())
         });
-        
-        
+
         methods.add_method("singular_runtime_type", |_, this, ()| {
             if this.is_singular() {
                 let ty: LuaRuntimeType = this.singular_runtime_type().into();
                 Ok(ty)
             } else {
-                Err(anyhow!("{} is not singular",this.full_name()).into())
+                Err(anyhow!("{} is not singular", this.full_name()).into())
             }
         });
         methods.add_method("runtime_field_type", |_, this, ()| {

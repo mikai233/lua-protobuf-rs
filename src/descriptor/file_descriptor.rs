@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use derive_more::{Deref, From, Into};
-use mlua::prelude::LuaUserData;
 use mlua::UserDataMethods;
+use mlua::prelude::LuaUserData;
 use protobuf::reflect::FileDescriptor;
 
 use crate::descriptor::enum_descriptor::LuaEnumDescriptor;
@@ -16,29 +16,21 @@ pub struct LuaFileDescriptor(pub FileDescriptor);
 
 impl LuaUserData for LuaFileDescriptor {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("name", |_, this, ()| {
-            Ok(this.name().to_string())
-        });
+        methods.add_method("name", |_, this, ()| Ok(this.name().to_string()));
 
-        methods.add_method("package", |_, this, ()| {
-            Ok(this.package().to_string())
-        });
-        
-        methods.add_method("syntax", |_, this, ()| {
-            Ok(LuaSyntax(this.syntax()))
-        });
+        methods.add_method("package", |_, this, ()| Ok(this.package().to_string()));
+
+        methods.add_method("syntax", |_, this, ()| Ok(LuaSyntax(this.syntax())));
 
         methods.add_method("messages", |_, this, ()| {
             let messages: Vec<LuaMessageDescriptor> = this.messages().map(From::from).collect();
             Ok(messages)
         });
 
-
         methods.add_method("enums", |_, this, ()| {
             let enums: Vec<LuaEnumDescriptor> = this.enums().map(From::from).collect();
             Ok(enums)
         });
-
 
         methods.add_method("services", |_, this, ()| {
             let services: Vec<LuaServiceDescriptor> = this.services().map(From::from).collect();
@@ -50,51 +42,85 @@ impl LuaUserData for LuaFileDescriptor {
             Ok(descriptors)
         });
 
-        methods.add_method("message_by_package_relative_name", |_, this, name: String| {
-            let descriptor: Option<LuaMessageDescriptor> = this.message_by_package_relative_name(name.as_str()).map(From::from);
-            Ok(descriptor)
-        });
-        
+        methods.add_method(
+            "message_by_package_relative_name",
+            |_, this, name: String| {
+                let descriptor: Option<LuaMessageDescriptor> = this
+                    .message_by_package_relative_name(name.as_str())
+                    .map(From::from);
+                Ok(descriptor)
+            },
+        );
+
         methods.add_method("enum_by_package_relative_name", |_, this, name: String| {
-            let descriptor: Option<LuaEnumDescriptor> = this.enum_by_package_relative_name(name.as_str()).map(From::from);
+            let descriptor: Option<LuaEnumDescriptor> = this
+                .enum_by_package_relative_name(name.as_str())
+                .map(From::from);
             Ok(descriptor)
         });
 
         methods.add_method("message_by_full_name", |_, this, name: String| {
-            let descriptor: Option<LuaMessageDescriptor> = this.message_by_full_name(name.as_str()).map(From::from);
+            let descriptor: Option<LuaMessageDescriptor> =
+                this.message_by_full_name(name.as_str()).map(From::from);
             Ok(descriptor)
         });
 
         methods.add_method("enum_by_full_name", |_, this, name: String| {
-            let descriptor: Option<LuaEnumDescriptor> = this.enum_by_full_name(name.as_str()).map(From::from);
+            let descriptor: Option<LuaEnumDescriptor> =
+                this.enum_by_full_name(name.as_str()).map(From::from);
             Ok(descriptor)
         });
 
-        methods.add_function("new_dynamic", |_, (proto, dependencies): (LuaFileDescriptorProto, Vec<LuaFileDescriptor>)| {
-            let descriptor: LuaFileDescriptor = FileDescriptor::new_dynamic(
-                proto.into(),
-                dependencies.into_iter().map(Into::into).collect::<Vec<FileDescriptor>>().as_slice())
-                .map_err(|e| anyhow!(e))?.into();
-            Ok(descriptor)
-        });
+        methods.add_function(
+            "new_dynamic",
+            |_, (proto, dependencies): (LuaFileDescriptorProto, Vec<LuaFileDescriptor>)| {
+                let descriptor: LuaFileDescriptor = FileDescriptor::new_dynamic(
+                    proto.into(),
+                    dependencies
+                        .into_iter()
+                        .map(Into::into)
+                        .collect::<Vec<FileDescriptor>>()
+                        .as_slice(),
+                )
+                .map_err(|e| anyhow!(e))?
+                .into();
+                Ok(descriptor)
+            },
+        );
 
-        methods.add_function("new_dynamic_fds", |_, (protos, dependencies): (Vec<LuaFileDescriptorProto>, Vec<LuaFileDescriptor>)| {
-            let descriptors: Vec<LuaFileDescriptor> = FileDescriptor::new_dynamic_fds(
-                protos.into_iter().map(Into::into).collect(),
-                dependencies.into_iter().map(Into::into).collect::<Vec<FileDescriptor>>().as_slice())
-                .map_err(|e| anyhow!(e))?.into_iter().map(Into::into).collect();
-            Ok(descriptors)
-        });
-        
+        methods.add_function(
+            "new_dynamic_fds",
+            |_, (protos, dependencies): (Vec<LuaFileDescriptorProto>, Vec<LuaFileDescriptor>)| {
+                let descriptors: Vec<LuaFileDescriptor> = FileDescriptor::new_dynamic_fds(
+                    protos.into_iter().map(Into::into).collect(),
+                    dependencies
+                        .into_iter()
+                        .map(Into::into)
+                        .collect::<Vec<FileDescriptor>>()
+                        .as_slice(),
+                )
+                .map_err(|e| anyhow!(e))?
+                .into_iter()
+                .map(Into::into)
+                .collect();
+                Ok(descriptors)
+            },
+        );
+
         methods.add_method("proto", |_, this, ()| {
             Ok::<LuaFileDescriptorProto, _>(this.proto().clone().into())
         });
 
         methods.add_method("deps", |_, this, ()| {
-            let descriptors: Vec<LuaFileDescriptor> = this.deps().iter().map(Clone::clone).map(From::from).collect();
+            let descriptors: Vec<LuaFileDescriptor> = this
+                .deps()
+                .iter()
+                .map(Clone::clone)
+                .map(From::from)
+                .collect();
             Ok(descriptors)
         });
-        
+
         methods.add_method("public_deps", |_, this, ()| {
             let descriptors: Vec<LuaFileDescriptor> = this.public_deps().map(From::from).collect();
             Ok(descriptors)

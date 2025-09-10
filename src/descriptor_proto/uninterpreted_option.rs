@@ -1,5 +1,7 @@
 use crate::descriptor_proto::name_part::LuaNamePart;
-use crate::{add_message_dyn_trait_method, add_message_full_trait_method, add_message_trait_method};
+use crate::{
+    add_message_dyn_trait_method, add_message_full_trait_method, add_message_trait_method,
+};
 use derive_more::{Deref, DerefMut, From, Into};
 use mlua::prelude::LuaUserData;
 use mlua::{MetaMethod, UserDataFields, UserDataMethods};
@@ -11,7 +13,12 @@ pub struct LuaUninterpretedOption(pub UninterpretedOption);
 impl LuaUserData for LuaUninterpretedOption {
     fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
         fields.add_field_method_get("name", |_, this| {
-            let name = this.name.iter().map(Clone::clone).map(Into::into).collect::<Vec<LuaNamePart>>();
+            let name = this
+                .name
+                .iter()
+                .map(Clone::clone)
+                .map(Into::into)
+                .collect::<Vec<LuaNamePart>>();
             Ok(name)
         });
 
@@ -27,12 +34,13 @@ impl LuaUserData for LuaUninterpretedOption {
             Ok(this.negative_int_value.clone())
         });
 
-        fields.add_field_method_get("double_value", |_, this| {
-            Ok(this.double_value.clone())
-        });
+        fields.add_field_method_get("double_value", |_, this| Ok(this.double_value.clone()));
 
         fields.add_field_method_get("string_value", |_, this| {
-            Ok(this.string_value.as_ref().map(|v| String::from_utf8_lossy(v).to_string()))
+            Ok(this
+                .string_value
+                .as_ref()
+                .map(|v| String::from_utf8_lossy(v).to_string()))
         });
 
         fields.add_field_method_get("aggregate_value", |_, this| {
@@ -41,9 +49,7 @@ impl LuaUserData for LuaUninterpretedOption {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_meta_method(MetaMethod::ToString, |_, this, ()| {
-            Ok(this.to_string())
-        });
+        methods.add_meta_method(MetaMethod::ToString, |_, this, ()| Ok(this.to_string()));
 
         methods.add_method("identifier_value", |_, this, ()| {
             Ok(this.identifier_value().to_string())
@@ -111,18 +117,17 @@ impl LuaUserData for LuaUninterpretedOption {
             Ok(())
         });
 
-        methods.add_method("double_value", |_, this, ()| {
-            Ok(this.double_value())
-        });
+        methods.add_method("double_value", |_, this, ()| Ok(this.double_value()));
 
         methods.add_method_mut("clear_double_value", |_, this, ()| {
             this.clear_double_value();
             Ok(())
         });
 
-        methods.add_method("has_double_value", |_, this, ()| {
-            Ok(this.has_double_value())
-        });
+        methods.add_method(
+            "has_double_value",
+            |_, this, ()| Ok(this.has_double_value()),
+        );
 
         methods.add_method_mut("set_double_value", |_, this, value: f64| {
             this.set_double_value(value);
@@ -138,9 +143,10 @@ impl LuaUserData for LuaUninterpretedOption {
             Ok(())
         });
 
-        methods.add_method("has_string_value", |_, this, ()| {
-            Ok(this.has_string_value())
-        });
+        methods.add_method(
+            "has_string_value",
+            |_, this, ()| Ok(this.has_string_value()),
+        );
 
         methods.add_method_mut("set_string_value", |_, this, value: Vec<u8>| {
             this.set_string_value(value);

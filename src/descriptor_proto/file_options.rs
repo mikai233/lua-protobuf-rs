@@ -1,29 +1,30 @@
 use crate::descriptor_proto::uninterpreted_option::LuaUninterpretedOption;
-use crate::{add_message_dyn_trait_method, add_message_full_trait_method, add_message_trait_method};
+use crate::{
+    add_message_dyn_trait_method, add_message_full_trait_method, add_message_trait_method,
+};
 use anyhow::anyhow;
 use derive_more::{Deref, DerefMut, From, Into};
 use mlua::prelude::LuaUserData;
 use mlua::{MetaMethod, UserDataFields, UserDataMethods};
-use protobuf::descriptor::file_options::OptimizeMode;
-use protobuf::descriptor::FileOptions;
 use protobuf::Enum;
+use protobuf::descriptor::FileOptions;
+use protobuf::descriptor::file_options::OptimizeMode;
 
 #[derive(PartialEq, Clone, Default, Debug, Deref, DerefMut, From, Into)]
 pub struct LuaFileOptions(pub FileOptions);
 
 impl LuaUserData for LuaFileOptions {
     fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
-        fields.add_field_method_get("java_package", |_, this| {
-            Ok(this.java_package.clone())
-        });
+        fields.add_field_method_get("java_package", |_, this| Ok(this.java_package.clone()));
 
         fields.add_field_method_get("java_outer_classname", |_, this| {
             Ok(this.java_outer_classname.clone())
         });
 
-        fields.add_field_method_get("java_multiple_files", |_, this| {
-            Ok(this.java_multiple_files)
-        });
+        fields.add_field_method_get(
+            "java_multiple_files",
+            |_, this| Ok(this.java_multiple_files),
+        );
 
         fields.add_field_method_get("java_generate_equals_and_hash", |_, this| {
             Ok(this.java_generate_equals_and_hash)
@@ -37,33 +38,29 @@ impl LuaUserData for LuaFileOptions {
             Ok(this.optimize_for.map(|e| e.value()))
         });
 
-        fields.add_field_method_get("go_package", |_, this| {
-            Ok(this.go_package.clone())
-        });
+        fields.add_field_method_get("go_package", |_, this| Ok(this.go_package.clone()));
 
-        fields.add_field_method_get("cc_generic_services", |_, this| {
-            Ok(this.cc_generic_services)
-        });
+        fields.add_field_method_get(
+            "cc_generic_services",
+            |_, this| Ok(this.cc_generic_services),
+        );
 
         fields.add_field_method_get("java_generic_services", |_, this| {
             Ok(this.java_generic_services)
         });
 
-        fields.add_field_method_get("py_generic_services", |_, this| {
-            Ok(this.py_generic_services)
-        });
+        fields.add_field_method_get(
+            "py_generic_services",
+            |_, this| Ok(this.py_generic_services),
+        );
 
         fields.add_field_method_get("php_generic_services", |_, this| {
             Ok(this.php_generic_services)
         });
 
-        fields.add_field_method_get("deprecated", |_, this| {
-            Ok(this.deprecated)
-        });
+        fields.add_field_method_get("deprecated", |_, this| Ok(this.deprecated));
 
-        fields.add_field_method_get("cc_enable_arenas", |_, this| {
-            Ok(this.cc_enable_arenas)
-        });
+        fields.add_field_method_get("cc_enable_arenas", |_, this| Ok(this.cc_enable_arenas));
 
         fields.add_field_method_get("objc_class_prefix", |_, this| {
             Ok(this.objc_class_prefix.clone())
@@ -73,44 +70,42 @@ impl LuaUserData for LuaFileOptions {
             Ok(this.csharp_namespace.clone())
         });
 
-        fields.add_field_method_get("swift_prefix", |_, this| {
-            Ok(this.swift_prefix.clone())
-        });
+        fields.add_field_method_get("swift_prefix", |_, this| Ok(this.swift_prefix.clone()));
 
         fields.add_field_method_get("php_class_prefix", |_, this| {
             Ok(this.php_class_prefix.clone())
         });
 
-        fields.add_field_method_get("php_namespace", |_, this| {
-            Ok(this.php_namespace.clone())
-        });
+        fields.add_field_method_get("php_namespace", |_, this| Ok(this.php_namespace.clone()));
 
         fields.add_field_method_get("php_metadata_namespace", |_, this| {
             Ok(this.php_metadata_namespace.clone())
         });
 
-        fields.add_field_method_get("ruby_package", |_, this| {
-            Ok(this.ruby_package.clone())
-        });
+        fields.add_field_method_get("ruby_package", |_, this| Ok(this.ruby_package.clone()));
 
         fields.add_field_method_get("uninterpreted_option", |_, this| {
-            let uninterpreted_option = this.uninterpreted_option.iter().map(Clone::clone).map(Into::into).collect::<Vec<LuaUninterpretedOption>>();
+            let uninterpreted_option = this
+                .uninterpreted_option
+                .iter()
+                .map(Clone::clone)
+                .map(Into::into)
+                .collect::<Vec<LuaUninterpretedOption>>();
             Ok(uninterpreted_option)
         });
     }
 
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_meta_method(MetaMethod::ToString, |_, this, ()| {
-            Ok(this.to_string())
-        });
+        methods.add_meta_method(MetaMethod::ToString, |_, this, ()| Ok(this.to_string()));
 
         methods.add_method("java_package", |_, this, ()| {
             Ok(this.java_package().to_string())
         });
 
-        methods.add_method("has_java_package", |_, this, ()| {
-            Ok(this.has_java_package())
-        });
+        methods.add_method(
+            "has_java_package",
+            |_, this, ()| Ok(this.has_java_package()),
+        );
 
         methods.add_method_mut("clear_java_package", |_, this, ()| {
             this.clear_java_package();
@@ -210,13 +205,12 @@ impl LuaUserData for LuaFileOptions {
             Ok(())
         });
 
-        methods.add_method("optimize_for", |_, this, ()| {
-            Ok(this.optimize_for() as i32)
-        });
+        methods.add_method("optimize_for", |_, this, ()| Ok(this.optimize_for() as i32));
 
-        methods.add_method("has_optimize_for", |_, this, ()| {
-            Ok(this.has_optimize_for())
-        });
+        methods.add_method(
+            "has_optimize_for",
+            |_, this, ()| Ok(this.has_optimize_for()),
+        );
 
         methods.add_method_mut("clear_optimize_for", |_, this, ()| {
             this.clear_optimize_for();
@@ -233,9 +227,7 @@ impl LuaUserData for LuaFileOptions {
             Ok(this.go_package().to_string())
         });
 
-        methods.add_method("has_go_package", |_, this, ()| {
-            Ok(this.has_go_package())
-        });
+        methods.add_method("has_go_package", |_, this, ()| Ok(this.has_go_package()));
 
         methods.add_method_mut("clear_go_package", |_, this, ()| {
             this.clear_go_package();
@@ -251,9 +243,7 @@ impl LuaUserData for LuaFileOptions {
             Ok(this.mut_go_package().clone())
         });
 
-        methods.add_method_mut("take_go_package", |_, this, ()| {
-            Ok(this.take_go_package())
-        });
+        methods.add_method_mut("take_go_package", |_, this, ()| Ok(this.take_go_package()));
 
         methods.add_method("cc_generic_services", |_, this, ()| {
             Ok(this.cc_generic_services())
@@ -327,13 +317,9 @@ impl LuaUserData for LuaFileOptions {
             Ok(())
         });
 
-        methods.add_method("deprecated", |_, this, ()| {
-            Ok(this.deprecated())
-        });
+        methods.add_method("deprecated", |_, this, ()| Ok(this.deprecated()));
 
-        methods.add_method("has_deprecated", |_, this, ()| {
-            Ok(this.has_deprecated())
-        });
+        methods.add_method("has_deprecated", |_, this, ()| Ok(this.has_deprecated()));
 
         methods.add_method_mut("clear_deprecated", |_, this, ()| {
             this.clear_deprecated();
@@ -345,9 +331,10 @@ impl LuaUserData for LuaFileOptions {
             Ok(())
         });
 
-        methods.add_method("cc_enable_arenas", |_, this, ()| {
-            Ok(this.cc_enable_arenas())
-        });
+        methods.add_method(
+            "cc_enable_arenas",
+            |_, this, ()| Ok(this.cc_enable_arenas()),
+        );
 
         methods.add_method("has_cc_enable_arenas", |_, this, ()| {
             Ok(this.has_cc_enable_arenas())
@@ -419,9 +406,10 @@ impl LuaUserData for LuaFileOptions {
             Ok(this.swift_prefix().to_string())
         });
 
-        methods.add_method("has_swift_prefix", |_, this, ()| {
-            Ok(this.has_swift_prefix())
-        });
+        methods.add_method(
+            "has_swift_prefix",
+            |_, this, ()| Ok(this.has_swift_prefix()),
+        );
 
         methods.add_method_mut("clear_swift_prefix", |_, this, ()| {
             this.clear_swift_prefix();
@@ -523,9 +511,10 @@ impl LuaUserData for LuaFileOptions {
             Ok(this.ruby_package().to_string())
         });
 
-        methods.add_method("has_ruby_package", |_, this, ()| {
-            Ok(this.has_ruby_package())
-        });
+        methods.add_method(
+            "has_ruby_package",
+            |_, this, ()| Ok(this.has_ruby_package()),
+        );
 
         methods.add_method_mut("clear_ruby_package", |_, this, ()| {
             this.clear_ruby_package();

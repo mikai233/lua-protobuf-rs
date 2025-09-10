@@ -1,7 +1,7 @@
 use crate::runtime_type::LuaRuntimeType;
 use derive_more::{Deref, From, Into};
-use mlua::prelude::LuaUserData;
 use mlua::UserDataMethods;
+use mlua::prelude::LuaUserData;
 use protobuf::reflect::RuntimeFieldType;
 use std::ops::Deref;
 
@@ -18,7 +18,7 @@ impl LuaUserData for LuaRuntimeFieldType {
                 Ok(None)
             }
         });
-        
+
         methods.add_method("get_repeated", |_, this, ()| {
             if let RuntimeFieldType::Repeated(ty) = this.deref() {
                 let ty: LuaRuntimeType = From::from(ty.clone());

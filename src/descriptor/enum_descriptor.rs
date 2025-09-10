@@ -11,21 +11,15 @@ pub struct LuaEnumDescriptor(pub EnumDescriptor);
 
 impl LuaUserData for LuaEnumDescriptor {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_meta_method(MetaMethod::ToString, |_, this, ()| {
-            Ok(this.to_string())
-        });
+        methods.add_meta_method(MetaMethod::ToString, |_, this, ()| Ok(this.to_string()));
 
         methods.add_method("proto", |_, this, ()| {
             Ok::<LuaEnumDescriptorProto, _>(this.proto().clone().into())
         });
 
-        methods.add_method("name", |_, this, ()| {
-            Ok(this.name().to_string())
-        });
+        methods.add_method("name", |_, this, ()| Ok(this.name().to_string()));
 
-        methods.add_method("full_name", |_, this, ()| {
-            Ok(this.full_name().to_string())
-        });
+        methods.add_method("full_name", |_, this, ()| Ok(this.full_name().to_string()));
 
         methods.add_method("name_to_package", |_, this, ()| {
             Ok(this.name_to_package().to_string())
@@ -61,7 +55,9 @@ impl LuaUserData for LuaEnumDescriptor {
         });
 
         methods.add_method("value_by_number_or_default", |_, this, number: i32| {
-            Ok(LuaEnumValueDescriptor(this.value_by_number_or_default(number)))
+            Ok(LuaEnumValueDescriptor(
+                this.value_by_number_or_default(number),
+            ))
         });
 
         // methods.add_method("is", |_, this| {
