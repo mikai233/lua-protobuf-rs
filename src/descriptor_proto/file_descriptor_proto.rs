@@ -1,4 +1,4 @@
-use crate::descriptor_proto::descriptor_proto::LuaDescriptorProto;
+use crate::descriptor_proto::LuaDescriptorProto;
 use crate::descriptor_proto::enum_descriptor_proto::LuaEnumDescriptorProto;
 use crate::descriptor_proto::field_descriptor_proto::LuaFieldDescriptorProto;
 use crate::descriptor_proto::file_options::LuaFileOptions;

@@ -36,7 +36,8 @@ impl LuaUserData for LuaLocation {
         });
 
         methods.add_method_mut("clear_leading_comments", |_, this, ()| {
-            Ok(this.clear_leading_comments())
+            this.clear_leading_comments();
+            Ok(())
         });
 
         methods.add_method("has_leading_comments", |_, this, ()| {
@@ -45,7 +46,10 @@ impl LuaUserData for LuaLocation {
 
         methods.add_method_mut(
             "set_leading_comments",
-            |_, this, v: ::std::string::String| Ok(this.set_leading_comments(v)),
+            |_, this, v: ::std::string::String| {
+                this.set_leading_comments(v);
+                Ok(())
+            },
         );
 
         methods.add_method_mut("mut_leading_comments", |_, this, ()| {
@@ -61,7 +65,8 @@ impl LuaUserData for LuaLocation {
         });
 
         methods.add_method_mut("clear_trailing_comments", |_, this, ()| {
-            Ok(this.clear_trailing_comments())
+            this.clear_trailing_comments();
+            Ok(())
         });
 
         methods.add_method("has_trailing_comments", |_, this, ()| {
@@ -69,7 +74,8 @@ impl LuaUserData for LuaLocation {
         });
 
         methods.add_method_mut("set_trailing_comments", |_, this, v: String| {
-            Ok(this.set_trailing_comments(v))
+            this.set_trailing_comments(v);
+            Ok(())
         });
 
         methods.add_method_mut("mut_trailing_comments", |_, this, ()| {

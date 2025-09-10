@@ -25,19 +25,31 @@ impl LuaUserData for LuaReservedRange {
 
         methods.add_method("start", |_, this, ()| Ok(this.start()));
 
-        methods.add_method_mut("clear_start", |_, this, ()| Ok(this.clear_start()));
+        methods.add_method_mut("clear_start", |_, this, ()| {
+            this.clear_start();
+            Ok(())
+        });
 
         methods.add_method("has_start", |_, this, ()| Ok(this.has_start()));
 
-        methods.add_method_mut("set_start", |_, this, v: i32| Ok(this.set_start(v)));
+        methods.add_method_mut("set_start", |_, this, v: i32| {
+            this.set_start(v);
+            Ok(())
+        });
 
         methods.add_method("end", |_, this, ()| Ok(this.end()));
 
-        methods.add_method_mut("clear_end", |_, this, ()| Ok(this.clear_end()));
+        methods.add_method_mut("clear_end", |_, this, ()| {
+            this.clear_end();
+            Ok(())
+        });
 
         methods.add_method_mut("has_end", |_, this, ()| Ok(this.has_end()));
 
-        methods.add_method_mut("set_end", |_, this, v: i32| Ok(this.set_end(v)));
+        methods.add_method_mut("set_end", |_, this, v: i32| {
+            this.set_end(v);
+            Ok(())
+        });
 
         add_message_trait_method!(methods, ReservedRange, LuaReservedRange);
 

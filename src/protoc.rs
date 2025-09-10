@@ -25,7 +25,7 @@ pub struct LuaProtoc {
 
 impl LuaProtoc {
     pub fn new(descriptors: Vec<FileDescriptor>) -> Self {
-        let codec = LuaProtoCodec::default();
+        let codec = LuaProtoCodec;
         let mut file_descriptors = HashMap::new();
         let mut message_descriptors = HashMap::new();
         let mut enum_descriptors = HashMap::new();
@@ -92,11 +92,7 @@ impl LuaProtoc {
             .filter_map(|file| file.ok())
         {
             let pb_path = entry.path();
-            if pb_path
-                .extension()
-                .and_then(|e| Some(e == "pb"))
-                .unwrap_or(false)
-            {
+            if pb_path.extension().map(|e| e == "pb").unwrap_or(false) {
                 let mut pb_file = std::fs::File::open(pb_path)
                     .context(format!("failed open {}", pb_path.to_string_lossy()))?;
                 let mut input = CodedInputStream::new(&mut pb_file);
@@ -111,7 +107,7 @@ impl LuaProtoc {
 
     pub fn gen_pb(&self, path: String) -> anyhow::Result<()> {
         let path = PathBuf::from(path);
-        for (_, file_descriptor) in &self.file_descriptors {
+        for file_descriptor in self.file_descriptors.values() {
             let name = file_descriptor
                 .name()
                 .strip_suffix(".proto")
@@ -127,7 +123,7 @@ impl LuaProtoc {
 
     pub fn gen_lua(&self, path: String) -> anyhow::Result<()> {
         let path = PathBuf::from(path);
-        for (_, file_descriptor) in &self.file_descriptors {
+        for file_descriptor in self.file_descriptors.values() {
             let name = file_descriptor
                 .name()
                 .strip_suffix(".proto")
@@ -231,9 +227,7 @@ impl LuaProtoc {
     fn gen_lua_enum(&self, parent: Option<String>, descriptor: &EnumDescriptor) -> String {
         let name = descriptor.name();
         let message = match parent {
-            None => {
-                format!("{}", name)
-            }
+            None => name.to_string(),
             Some(parent) => {
                 format!("{}_{}", parent, name)
             }
@@ -260,34 +254,31 @@ impl LuaProtoc {
     }
 
     fn decorate_with_parent(&self, parent: &Option<String>, name: String) -> String {
-        let message = match &parent {
-            None => {
-                format!("{}", name)
-            }
+        match &parent {
+            None => name.to_string(),
             Some(parent) => {
                 format!("{}_{}", parent, name)
             }
-        };
-        message
+        }
     }
 
     fn decorate_message_type_with_parent(
         &self,
         runtime_field_type: RuntimeFieldType,
-        nested_messages_or_enums: &Vec<(String, String)>,
+        nested_messages_or_enums: &[(String, String)],
     ) -> Option<String> {
         fn find_message(
-            nested_messages_or_enums: &Vec<(String, String)>,
+            nested_messages_or_enums: &[(String, String)],
             name: &str,
         ) -> Option<String> {
-            match nested_messages_or_enums.iter().rfind(|(n, _)| n == name) {
-                None => None,
-                Some((_, p)) => Some(p.clone()),
-            }
+            nested_messages_or_enums
+                .iter()
+                .rfind(|(n, _)| n == name)
+                .map(|(_, p)| p.clone())
         }
 
         fn decorate_message(
-            nested_messages_or_enums: &Vec<(String, String)>,
+            nested_messages_or_enums: &[(String, String)],
             rt: RuntimeType,
         ) -> Option<String> {
             match rt {
@@ -307,7 +298,7 @@ impl LuaProtoc {
 
     fn lua_type_of(&self, parent: Option<String>, field_type: RuntimeFieldType) -> String {
         fn type_of(protoc: &LuaProtoc, parent: Option<String>, rt: RuntimeType) -> String {
-            let ty = match rt {
+            match rt {
                 RuntimeType::I32
                 | RuntimeType::I64
                 | RuntimeType::U32
@@ -325,10 +316,10 @@ impl LuaProtoc {
                     let name = m.name().to_string();
                     protoc.decorate_with_parent(&parent, name)
                 }
-            };
-            ty
+            }
         }
-        let ty = match field_type {
+
+        match field_type {
             RuntimeFieldType::Singular(rt) => type_of(self, parent, rt),
             RuntimeFieldType::Repeated(rt) => {
                 format!("{}[]", type_of(self, parent, rt))
@@ -340,8 +331,7 @@ impl LuaProtoc {
                     type_of(self, parent, value_rt)
                 )
             }
-        };
-        ty
+        }
     }
 
     pub fn encode(
@@ -382,7 +372,7 @@ impl LuaProtoc {
                 let proto_path = file.path();
                 if proto_path
                     .extension()
-                    .and_then(|e| Some(e == "proto"))
+                    .map(|e| e == "proto")
                     .unwrap_or(false)
                 {
                     protos.push(proto_path.to_path_buf());
@@ -468,7 +458,7 @@ impl LuaUserData for LuaProtoc {
         });
 
         methods.add_method("file_descriptor_by_name", |_, protoc, name: String| {
-            let descriptor = protoc.file_descriptors.get(&name).map(Clone::clone);
+            let descriptor = protoc.file_descriptors.get(&name).cloned();
             Ok(descriptor)
         });
 
@@ -482,7 +472,7 @@ impl LuaUserData for LuaProtoc {
         });
 
         methods.add_method("message_descriptor_by_name", |_, protoc, name: String| {
-            let descriptor = protoc.message_descriptors.get(&name).map(Clone::clone);
+            let descriptor = protoc.message_descriptors.get(&name).cloned();
             Ok(descriptor)
         });
 
@@ -492,7 +482,7 @@ impl LuaUserData for LuaProtoc {
         });
 
         methods.add_method("enum_descriptor_by_name", |_, protoc, name: String| {
-            let descriptor = protoc.enum_descriptors.get(&name).map(Clone::clone);
+            let descriptor = protoc.enum_descriptors.get(&name).cloned();
             Ok(descriptor)
         });
     }

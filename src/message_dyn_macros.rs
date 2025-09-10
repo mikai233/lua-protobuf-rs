@@ -2,7 +2,7 @@
 macro_rules! add_message_dyn_trait_method {
     ($methods:ident, $target:ty, $wrapper:ty) => {
         $methods.add_method("descriptor_dyn", |_, this, ()| {
-            Ok::<crate::descriptor::message_descriptor::LuaMessageDescriptor, _>(
+            Ok::<$crate::descriptor::message_descriptor::LuaMessageDescriptor, _>(
                 protobuf::MessageDyn::descriptor_dyn(&**this).into(),
             )
         });

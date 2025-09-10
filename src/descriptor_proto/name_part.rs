@@ -21,10 +21,14 @@ impl LuaUserData for LuaNamePart {
 
         methods.add_method("name_part", |_, this, ()| Ok(this.name_part().to_string()));
 
-        methods.add_method_mut("clear_name_part", |_, this, ()| Ok(this.clear_name_part()));
+        methods.add_method_mut("clear_name_part", |_, this, ()| {
+            this.clear_name_part();
+            Ok(())
+        });
 
         methods.add_method_mut("set_name_part", |_, this, v: String| {
-            Ok(this.set_name_part(v))
+            this.set_name_part(v);
+            Ok(())
         });
 
         methods.add_method_mut("mut_name_part", |_, this, ()| {
@@ -36,7 +40,8 @@ impl LuaUserData for LuaNamePart {
         methods.add_method("is_extension", |_, this, ()| Ok(this.is_extension()));
 
         methods.add_method_mut("clear_is_extension", |_, this, ()| {
-            Ok(this.clear_is_extension())
+            this.clear_is_extension();
+            Ok(())
         });
 
         methods.add_method(
@@ -45,7 +50,8 @@ impl LuaUserData for LuaNamePart {
         );
 
         methods.add_method_mut("set_is_extension", |_, this, v: bool| {
-            Ok(this.set_is_extension(v))
+            this.set_is_extension(v);
+            Ok(())
         });
 
         add_message_trait_method!(methods, NamePart, LuaNamePart);

@@ -24,13 +24,9 @@ impl LuaUserData for LuaMethodDescriptorProto {
             Ok(options)
         });
 
-        fields.add_field_method_get("client_streaming", |_, this| {
-            Ok(this.client_streaming.clone())
-        });
+        fields.add_field_method_get("client_streaming", |_, this| Ok(this.client_streaming));
 
-        fields.add_field_method_get("server_streaming", |_, this| {
-            Ok(this.server_streaming.clone())
-        });
+        fields.add_field_method_get("server_streaming", |_, this| Ok(this.server_streaming));
     }
 
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {

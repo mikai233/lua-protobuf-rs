@@ -26,15 +26,11 @@ impl LuaUserData for LuaUninterpretedOption {
             Ok(this.identifier_value.clone())
         });
 
-        fields.add_field_method_get("positive_int_value", |_, this| {
-            Ok(this.positive_int_value.clone())
-        });
+        fields.add_field_method_get("positive_int_value", |_, this| Ok(this.positive_int_value));
 
-        fields.add_field_method_get("negative_int_value", |_, this| {
-            Ok(this.negative_int_value.clone())
-        });
+        fields.add_field_method_get("negative_int_value", |_, this| Ok(this.negative_int_value));
 
-        fields.add_field_method_get("double_value", |_, this| Ok(this.double_value.clone()));
+        fields.add_field_method_get("double_value", |_, this| Ok(this.double_value));
 
         fields.add_field_method_get("string_value", |_, this| {
             Ok(this

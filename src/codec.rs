@@ -205,7 +205,7 @@ impl LuaProtoCodec {
             RuntimeType::Enum(descriptor) => {
                 let value = value
                     .as_i32()
-                    .ok_or(value_cast_error(name, field, &value_ty, "i32"))?;
+                    .ok_or(value_cast_error(name, field, value_ty, "i32"))?;
                 descriptor
                     .value_by_number(value)
                     .ok_or(anyhow!("incorrect number of enum {}", descriptor.name()))?;
@@ -214,7 +214,7 @@ impl LuaProtoCodec {
             RuntimeType::Message(descriptor) => {
                 let table = value
                     .as_table()
-                    .ok_or(value_cast_error(name, field, &value_ty, "i32"))?;
+                    .ok_or(value_cast_error(name, field, value_ty, "i32"))?;
                 let message = self.encode_message(table, descriptor)?;
                 ReflectValueBox::Message(message)
             }

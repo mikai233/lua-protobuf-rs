@@ -9,7 +9,7 @@ use crate::descriptor::enum_descriptor::LuaEnumDescriptor;
 use crate::descriptor::field_descriptor::LuaFieldDescriptor;
 use crate::descriptor::file_descriptor::LuaFileDescriptor;
 use crate::descriptor::oneof_descriptor::LuaOneofDescriptor;
-use crate::descriptor_proto::descriptor_proto::LuaDescriptorProto;
+use crate::descriptor_proto::LuaDescriptorProto;
 use crate::descriptor_proto::file_descriptor_proto::LuaFileDescriptorProto;
 use crate::message_dyn::LuaMessageDyn;
 
@@ -148,7 +148,7 @@ impl LuaUserData for LuaMessageDescriptor {
             let message = this
                 .parse_from_bytes(bytes.as_slice())
                 .map_err(|e| anyhow!(e))?;
-            let codec = LuaProtoCodec::default();
+            let codec = LuaProtoCodec;
             let message = codec.decode_message(lua, message.as_ref())?;
             Ok(message)
         });

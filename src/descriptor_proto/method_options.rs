@@ -42,15 +42,16 @@ impl LuaUserData for LuaMethodOptions {
 
         methods.add_method("deprecated", |_, this, ()| Ok(this.deprecated()));
 
-        methods.add_method_mut(
-            "clear_deprecated",
-            |_, this, ()| Ok(this.clear_deprecated()),
-        );
+        methods.add_method_mut("clear_deprecated", |_, this, ()| {
+            this.clear_deprecated();
+            Ok(())
+        });
 
         methods.add_method("has_deprecated", |_, this, ()| Ok(this.has_deprecated()));
 
         methods.add_method_mut("set_deprecated", |_, this, v: bool| {
-            Ok(this.set_deprecated(v))
+            this.set_deprecated(v);
+            Ok(())
         });
 
         methods.add_method("idempotency_level", |_, this, ()| {
@@ -58,7 +59,8 @@ impl LuaUserData for LuaMethodOptions {
         });
 
         methods.add_method_mut("clear_idempotency_level", |_, this, ()| {
-            Ok(this.clear_idempotency_level())
+            this.clear_idempotency_level();
+            Ok(())
         });
 
         methods.add_method("has_idempotency_level", |_, this, ()| {
@@ -68,7 +70,8 @@ impl LuaUserData for LuaMethodOptions {
         methods.add_method_mut("set_idempotency_level", |_, this, v: i32| {
             let level =
                 IdempotencyLevel::from_i32(v).ok_or(anyhow!("unknown idempotency_level {v}"))?;
-            Ok(this.set_idempotency_level(level))
+            this.set_idempotency_level(level);
+            Ok(())
         });
 
         add_message_trait_method!(methods, MethodOptions, LuaMethodOptions);
