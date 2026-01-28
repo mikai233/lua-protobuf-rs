@@ -33,7 +33,7 @@ google_protoc = []
 vendored_protoc = ["protoc-bin-vendored"]
 
 [dependencies]
-mlua = { version = "0.11.5", features = ["macros", "anyhow"] }
+mlua = { version = "0.11.6", features = ["macros", "anyhow"] }
 anyhow = "1.0.100"
 walkdir = "2.5.0"
 tempfile = "3.24.0"
