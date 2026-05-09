@@ -8,7 +8,7 @@ use crate::pool::LuaProtoModule;
 
 pub mod codec;
 mod dynamic_message;
-mod gen_lua;
+mod lua_annotations;
 pub mod pool;
 mod schema;
 

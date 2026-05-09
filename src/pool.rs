@@ -10,7 +10,7 @@ use protobuf::{CodedInputStream, Message, MessageDyn};
 
 use crate::codec::{CodecOptions, LuaProtoCodec};
 use crate::dynamic_message::LuaDynamicMessage;
-use crate::gen_lua;
+use crate::lua_annotations;
 use crate::schema;
 
 #[derive(Default)]
@@ -300,7 +300,7 @@ impl LuaUserData for LuaProtoPool {
         });
 
         methods.add_method("gen_lua", |_, pool, path: String| {
-            gen_lua::generate(pool.file_descriptors.values(), path)
+            lua_annotations::generate(pool.file_descriptors.values(), path)
                 .map_err(|e| anyhow!("{e:?}"))?;
             Ok(())
         });
@@ -426,7 +426,7 @@ mod tests {
         );
 
         let dir = tempfile::tempdir()?;
-        crate::gen_lua::generate(pool.file_descriptors.values(), dir.path())?;
+        crate::lua_annotations::generate(pool.file_descriptors.values(), dir.path())?;
         let generated = std::fs::read_to_string(dir.path().join("temp.lua"))?;
         assert!(generated.contains("---@class demo_Player"));
         assert!(generated.contains("---@field id? string"));
