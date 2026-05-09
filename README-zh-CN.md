@@ -103,6 +103,19 @@ local bytes = pool:encode("com.mikai233.Player", message, {
 })
 ```
 
+如果只想校验 table 而不关心编码后的二进制，可以使用 `validate`：
+
+```lua
+local ok, err = pool:validate("com.mikai233.Player", {
+    attrs = { hp = {} },
+})
+
+if not ok then
+    print(err)
+    -- com.mikai233.Player.attrs["hp"]: value Table cannot be cast to int64
+end
+```
+
 # 反射
 
 反射 API 返回普通 Lua table，而不是 Rust userdata wrapper：
@@ -152,6 +165,24 @@ pool:gen_lua("proto")
 ---@class com_mikai233_LoginResponse
 ---@field player? com_mikai233_Player
 local com_mikai233_LoginResponse = { }
+```
+
+# Descriptor 导出
+
+运行时加载后的 schema 可以导出，后续直接加载缓存：
+
+```lua
+pool:write_descriptor_set("proto.pb")
+local cached = pb.load_descriptor_set("proto.pb")
+
+pool:write_file_descriptors("proto-pb")
+local cached_files = pb.load_descriptor_set("proto-pb")
+```
+
+也可以直接获得内存中的 descriptor set 二进制字符串：
+
+```lua
+local descriptor_set_bytes = pool:descriptor_set()
 ```
 
 # xLua 插件集成

@@ -116,6 +116,61 @@ impl LuaProtoPool {
         protos
     }
 
+    pub fn descriptor_set_bytes(&self) -> anyhow::Result<Vec<u8>> {
+        let mut set = FileDescriptorSet::default();
+        let mut file_descriptors = self.file_descriptors.values().collect::<Vec<_>>();
+        file_descriptors.sort_by_key(|descriptor| descriptor.name());
+        set.file = file_descriptors
+            .into_iter()
+            .map(|descriptor| descriptor.proto().clone())
+            .collect();
+        set.write_to_bytes().map_err(|e| anyhow!(e))
+    }
+
+    pub fn write_descriptor_set(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
+        let path = path.as_ref();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).context(format!(
+                "failed create descriptor set output directory {}",
+                parent.to_string_lossy()
+            ))?;
+        }
+        std::fs::write(path, self.descriptor_set_bytes()?).context(format!(
+            "failed write descriptor set {}",
+            path.to_string_lossy()
+        ))
+    }
+
+    pub fn write_file_descriptors(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
+        let path = path.as_ref();
+        std::fs::create_dir_all(path).context(format!(
+            "failed create file descriptor output directory {}",
+            path.to_string_lossy()
+        ))?;
+        let mut file_descriptors = self.file_descriptors.values().collect::<Vec<_>>();
+        file_descriptors.sort_by_key(|descriptor| descriptor.name());
+        for file_descriptor in file_descriptors {
+            let name = file_descriptor
+                .name()
+                .strip_suffix(".proto")
+                .unwrap_or_else(|| file_descriptor.name());
+            let file_path = path.join(format!("{name}.pb"));
+            if let Some(parent) = file_path.parent() {
+                std::fs::create_dir_all(parent).context(format!(
+                    "failed create file descriptor output directory {}",
+                    parent.to_string_lossy()
+                ))?;
+            }
+            std::fs::write(&file_path, file_descriptor.proto().write_to_bytes()?).context(
+                format!(
+                    "failed write file descriptor {}",
+                    file_path.to_string_lossy()
+                ),
+            )?;
+        }
+        Ok(())
+    }
+
     pub fn encode(
         &self,
         message_full_name: &str,
@@ -221,6 +276,17 @@ impl LuaUserData for LuaProtoPool {
             },
         );
 
+        methods.add_method(
+            "validate",
+            |_, pool, (message_full_name, lua_message, options): (String, Table, Option<Table>)| {
+                let options = Self::codec_options(options)?;
+                match pool.encode(&message_full_name, &lua_message, options) {
+                    Ok(_) => Ok((true, None::<String>)),
+                    Err(e) => Ok((false, Some(format!("{e:?}")))),
+                }
+            },
+        );
+
         methods.add_method("new", |_, pool, message_full_name: String| {
             let descriptor = pool
                 .message_descriptors
@@ -305,6 +371,23 @@ impl LuaUserData for LuaProtoPool {
 
         methods.add_method("gen_lua", |_, pool, path: String| {
             lua_annotations::generate(pool.file_descriptors.values(), path)
+                .map_err(|e| anyhow!("{e:?}"))?;
+            Ok(())
+        });
+
+        methods.add_method("descriptor_set", |lua, pool, ()| {
+            let bytes = pool.descriptor_set_bytes().map_err(|e| anyhow!("{e:?}"))?;
+            lua.create_string(bytes)
+        });
+
+        methods.add_method("write_descriptor_set", |_, pool, path: String| {
+            pool.write_descriptor_set(path)
+                .map_err(|e| anyhow!("{e:?}"))?;
+            Ok(())
+        });
+
+        methods.add_method("write_file_descriptors", |_, pool, path: String| {
+            pool.write_file_descriptors(path)
                 .map_err(|e| anyhow!("{e:?}"))?;
             Ok(())
         });
@@ -445,6 +528,17 @@ mod tests {
         let lua = Lua::new();
         let module = lua.create_proxy::<LuaProtoModule>()?;
         lua.globals().set("pb", module)?;
+        let descriptor_dir = tempfile::tempdir()?;
+        let descriptor_set_path = descriptor_dir.path().join("demo.pb");
+        let file_descriptor_dir = descriptor_dir.path().join("fds");
+        lua.globals().set(
+            "descriptor_set_path",
+            descriptor_set_path.to_string_lossy().to_string(),
+        )?;
+        lua.globals().set(
+            "file_descriptor_dir",
+            file_descriptor_dir.to_string_lossy().to_string(),
+        )?;
 
         lua.load(
             r#"
@@ -532,6 +626,19 @@ mod tests {
             assert(file.messages_by_name["demo.Player"].name == "Player")
             assert(file.enums_by_name["demo.State"].name == "State")
             assert(file.services_by_name["demo.PlayerService"].name == "PlayerService")
+
+            local descriptor_bytes = pool:descriptor_set()
+            assert(type(descriptor_bytes) == "string")
+            assert(#descriptor_bytes > 0)
+
+            pool:write_descriptor_set(descriptor_set_path)
+            local from_set = pb.load_descriptor_set(descriptor_set_path)
+            assert(from_set:message("demo.Player").full_name == "demo.Player")
+            assert(from_set:service("demo.PlayerService").methods_by_name.Get.input_type == "demo.Player")
+
+            pool:write_file_descriptors(file_descriptor_dir)
+            local from_files = pb.load_descriptor_set(file_descriptor_dir)
+            assert(from_files:enum("demo.State").values_by_name.ONLINE.number == 1)
             "#,
         )
         .exec()?;
@@ -617,6 +724,26 @@ mod tests {
                 pool:encode("demo.Player", { unknown_field = 1 })
             end)
             assert(ok == false)
+
+            local valid, validation_error = pool:validate("demo.Player", {
+                attrs = { hp = {} },
+            })
+            assert(valid == false, tostring(validation_error))
+            assert(validation_error:find('demo.Player.attrs["hp"]', 1, true) ~= nil, validation_error)
+            assert(validation_error:find("int64", 1, true) ~= nil, validation_error)
+
+            local valid_unknown, unknown_error = pool:validate("demo.Player", {
+                unknown_field = 1,
+            })
+            assert(valid_unknown == false, tostring(unknown_error))
+            assert(unknown_error:find("demo.Player.unknown_field", 1, true) ~= nil, unknown_error)
+
+            local valid_ok, no_error = pool:validate("demo.Player", {
+                id = "42",
+                attrs = { hp = "100" },
+            })
+            assert(valid_ok == true)
+            assert(no_error == nil)
 
             local ignored = pool:decode("demo.Player", pool:encode("demo.Player", {
                 unknown_field = 1,

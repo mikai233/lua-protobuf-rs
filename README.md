@@ -107,6 +107,19 @@ local bytes = pool:encode("com.mikai233.Player", message, {
 })
 ```
 
+Use `validate` when you want to check a table without keeping the encoded bytes:
+
+```lua
+local ok, err = pool:validate("com.mikai233.Player", {
+    attrs = { hp = {} },
+})
+
+if not ok then
+    print(err)
+    -- com.mikai233.Player.attrs["hp"]: value Table cannot be cast to int64
+end
+```
+
 # Reflection
 
 Reflection APIs return plain Lua tables instead of Rust userdata wrappers:
@@ -156,6 +169,24 @@ Example output:
 ---@class com_mikai233_LoginResponse
 ---@field player? com_mikai233_Player
 local com_mikai233_LoginResponse = { }
+```
+
+# Descriptor Export
+
+Runtime schemas can be exported and loaded again later:
+
+```lua
+pool:write_descriptor_set("proto.pb")
+local cached = pb.load_descriptor_set("proto.pb")
+
+pool:write_file_descriptors("proto-pb")
+local cached_files = pb.load_descriptor_set("proto-pb")
+```
+
+For in-memory use:
+
+```lua
+local descriptor_set_bytes = pool:descriptor_set()
 ```
 
 # xLua Integration

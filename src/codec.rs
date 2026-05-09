@@ -106,19 +106,34 @@ impl LuaProtoCodec {
         descriptor: &MessageDescriptor,
         options: CodecOptions,
     ) -> anyhow::Result<Box<dyn MessageDyn>> {
+        self.encode_message_at(lua_message, descriptor, options, descriptor.full_name())
+    }
+
+    fn encode_message_at(
+        &self,
+        lua_message: &Table,
+        descriptor: &MessageDescriptor,
+        options: CodecOptions,
+        path: &str,
+    ) -> anyhow::Result<Box<dyn MessageDyn>> {
         let name = descriptor.full_name();
         let mut message = descriptor.new_instance();
         for pair in lua_message.pairs::<Value, Value>() {
             let (field_key, field_value) = pair?;
             let field_key = field_key
                 .as_string()
-                .ok_or(anyhow!("message {} expects string field keys", name))?
+                .ok_or(anyhow!("{} expects string field keys", path))?
                 .to_str()?
                 .to_string();
+            let field_path = format!("{path}.{field_key}");
             let Some(field_descriptor) = descriptor.field_by_name_or_json_name(&field_key) else {
                 match options.unknown_fields {
                     UnknownFieldMode::Error => {
-                        return Err(anyhow!("field {} not found in message {}", field_key, name));
+                        return Err(anyhow!(
+                            "{}: field not found in message {}",
+                            field_path,
+                            name
+                        ));
                     }
                     UnknownFieldMode::Ignore => continue,
                 }
@@ -129,34 +144,33 @@ impl LuaProtoCodec {
             }
             match field_descriptor.runtime_field_type() {
                 RuntimeFieldType::Singular(ty) => {
-                    let boxed_value =
-                        self.box_value(name, &field_key, &ty, field_value, options)?;
+                    let boxed_value = self.box_value_at(&field_path, &ty, field_value, options)?;
                     field_descriptor.set_singular_field(message.as_mut(), boxed_value);
                 }
                 RuntimeFieldType::Repeated(ty) => {
                     let mut field_repeated = field_descriptor.mut_repeated(message.as_mut());
-                    let table = field_value.as_table().ok_or(anyhow!(
-                        "message {} field {} expects a table",
-                        name,
-                        field_key
-                    ))?;
-                    for v in table.sequence_values::<Value>() {
-                        let v = v?;
-                        let boxed_value = self.box_value(name, &field_key, &ty, v, options)?;
+                    let table = field_value
+                        .as_table()
+                        .ok_or(anyhow!("{} expects a table", field_path,))?;
+                    for (index, v) in table.sequence_values::<Value>().enumerate() {
+                        let value_path = format!("{}[{}]", field_path, index + 1);
+                        let v = v.context(format!("{value_path}: invalid sequence value"))?;
+                        let boxed_value = self.box_value_at(&value_path, &ty, v, options)?;
                         field_repeated.push(boxed_value);
                     }
                 }
                 RuntimeFieldType::Map(k_ty, v_ty) => {
                     let mut field_map = field_descriptor.mut_map(message.as_mut());
-                    let table = field_value.as_table().ok_or(anyhow!(
-                        "message {} field {} expects a table",
-                        name,
-                        field_key
-                    ))?;
+                    let table = field_value
+                        .as_table()
+                        .ok_or(anyhow!("{} expects a table", field_path,))?;
                     for pair in table.pairs::<Value, Value>() {
                         let (key, value) = pair?;
-                        let key = self.box_value(name, &field_key, &k_ty, key, options)?;
-                        let value = self.box_value(name, &field_key, &v_ty, value, options)?;
+                        let key_label = Self::lua_key_label(&key);
+                        let key_path = format!("{field_path}[{key_label}]");
+                        let value_path = key_path.clone();
+                        let key = self.box_value_at(&key_path, &k_ty, key, options)?;
+                        let value = self.box_value_at(&value_path, &v_ty, value, options)?;
                         field_map.insert(key, value);
                     }
                 }
@@ -229,14 +243,18 @@ impl LuaProtoCodec {
         value: Value,
         options: CodecOptions,
     ) -> anyhow::Result<ReflectValueBox> {
-        fn value_cast_error(message: &str, field: &str, value: &str, ty: &str) -> anyhow::Error {
-            anyhow!(
-                "message {} field {} value {} cannot be cast to {}",
-                message,
-                field,
-                value,
-                ty
-            )
+        self.box_value_at(&format!("{name}.{field}"), ty, value, options)
+    }
+
+    fn box_value_at(
+        &self,
+        path: &str,
+        ty: &RuntimeType,
+        value: Value,
+        options: CodecOptions,
+    ) -> anyhow::Result<ReflectValueBox> {
+        fn value_cast_error(path: &str, value: &str, ty: &str) -> anyhow::Error {
+            anyhow!("{}: value {} cannot be cast to {}", path, value, ty)
         }
 
         let value_ty = self.fmt_value(&value);
@@ -244,47 +262,47 @@ impl LuaProtoCodec {
             RuntimeType::I32 => {
                 let value = value
                     .as_i32()
-                    .ok_or(value_cast_error(name, field, value_ty, "i32"))?;
+                    .ok_or(value_cast_error(path, value_ty, "int32"))?;
                 ReflectValueBox::I32(value)
             }
             RuntimeType::I64 => {
                 let value =
-                    Self::lua_i64(value).ok_or(value_cast_error(name, field, value_ty, "i64"))?;
+                    Self::lua_i64(value).ok_or(value_cast_error(path, value_ty, "int64"))?;
                 ReflectValueBox::I64(value)
             }
             RuntimeType::U32 => {
                 let value = value
                     .as_u32()
-                    .ok_or(value_cast_error(name, field, value_ty, "u32"))?;
+                    .ok_or(value_cast_error(path, value_ty, "uint32"))?;
                 ReflectValueBox::U32(value)
             }
             RuntimeType::U64 => {
                 let value =
-                    Self::lua_u64(value).ok_or(value_cast_error(name, field, value_ty, "u64"))?;
+                    Self::lua_u64(value).ok_or(value_cast_error(path, value_ty, "uint64"))?;
                 ReflectValueBox::U64(value)
             }
             RuntimeType::F32 => {
                 let value = value
                     .as_f32()
-                    .ok_or(value_cast_error(name, field, value_ty, "f32"))?;
+                    .ok_or(value_cast_error(path, value_ty, "float"))?;
                 ReflectValueBox::F32(value)
             }
             RuntimeType::F64 => {
                 let value = value
                     .as_f64()
-                    .ok_or(value_cast_error(name, field, value_ty, "f64"))?;
+                    .ok_or(value_cast_error(path, value_ty, "double"))?;
                 ReflectValueBox::F64(value)
             }
             RuntimeType::Bool => {
                 let value = value
                     .as_boolean()
-                    .ok_or(value_cast_error(name, field, value_ty, "bool"))?;
+                    .ok_or(value_cast_error(path, value_ty, "bool"))?;
                 ReflectValueBox::Bool(value)
             }
             RuntimeType::String => {
                 let value = value
                     .as_string()
-                    .ok_or(value_cast_error(name, field, value_ty, "string"))?
+                    .ok_or(value_cast_error(path, value_ty, "string"))?
                     .to_str()?
                     .to_string();
                 ReflectValueBox::String(value)
@@ -293,22 +311,21 @@ impl LuaProtoCodec {
                 let bytes = match options.bytes {
                     BytesMode::String => value
                         .as_string()
-                        .ok_or(value_cast_error(name, field, value_ty, "binary string"))?
+                        .ok_or(value_cast_error(path, value_ty, "binary string"))?
                         .as_bytes()
                         .to_vec(),
                     BytesMode::Table => {
                         let table = value.as_table().ok_or(value_cast_error(
-                            name,
-                            field,
+                            path,
                             value_ty,
                             "byte table",
                         ))?;
                         let len = table.len()?;
                         let mut bytes = Vec::with_capacity(len as usize);
-                        for byte in table.sequence_values::<u8>() {
+                        for (index, byte) in table.sequence_values::<u8>().enumerate() {
                             let byte = anyhow::Context::context(
                                 byte,
-                                format!("message {} field {} expects u8 table", name, field),
+                                format!("{}[{}]: expected u8", path, index + 1),
                             )?;
                             bytes.push(byte);
                         }
@@ -324,29 +341,31 @@ impl LuaProtoCodec {
                         descriptor
                             .value_by_name(name.as_ref())
                             .ok_or(anyhow!(
-                                "unknown enum value {}.{}",
+                                "{}: unknown enum value {}.{}",
+                                path,
                                 descriptor.full_name(),
                                 name
                             ))?
                             .value()
                     }
                     value => value.as_i32().ok_or(value_cast_error(
-                        name,
-                        field,
+                        path,
                         value_ty,
                         "enum name or i32",
                     ))?,
                 };
-                descriptor
-                    .value_by_number(value)
-                    .ok_or(anyhow!("incorrect number of enum {}", descriptor.name()))?;
+                descriptor.value_by_number(value).ok_or(anyhow!(
+                    "{}: incorrect number of enum {}",
+                    path,
+                    descriptor.name()
+                ))?;
                 ReflectValueBox::Enum(descriptor.clone(), value)
             }
             RuntimeType::Message(descriptor) => {
                 let table = value
                     .as_table()
-                    .ok_or(value_cast_error(name, field, value_ty, "table"))?;
-                let message = self.encode_message(table, descriptor, options)?;
+                    .ok_or(value_cast_error(path, value_ty, "table"))?;
+                let message = self.encode_message_at(table, descriptor, options, path)?;
                 ReflectValueBox::Message(message)
             }
         };
@@ -451,6 +470,19 @@ impl LuaProtoCodec {
             #[cfg(any(feature = "luau", doc))]
             Value::Buffer(_) => "Buffer",
             Value::Other(_) => "Other",
+        }
+    }
+
+    fn lua_key_label(value: &Value) -> String {
+        match value {
+            Value::String(s) => match s.to_str() {
+                Ok(s) => format!("{s:?}"),
+                Err(_) => "\"<non-utf8>\"".to_string(),
+            },
+            Value::Integer(i) => i.to_string(),
+            Value::Number(n) => n.to_string(),
+            Value::Boolean(b) => b.to_string(),
+            _ => format!("<{}>", LuaProtoCodec.fmt_value(value)),
         }
     }
 }
