@@ -57,7 +57,7 @@ impl LuaUserData for LuaFieldDescriptor {
 
         methods.add_method("is_repeated", |_, this, ()| Ok(this.is_repeated()));
 
-        methods.add_method("is_map", |_, this, ()| Ok(this.is_repeated()));
+        methods.add_method("is_map", |_, this, ()| Ok(this.is_map()));
 
         methods.add_method("has_field", |_, this, m: AnyUserData| {
             let m = m.borrow::<LuaMessageDyn>()?;

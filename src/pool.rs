@@ -1,0 +1,423 @@
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+use anyhow::{Context, anyhow};
+use mlua::prelude::LuaUserData;
+use mlua::{Lua, String as LuaString, Table, UserDataMethods};
+use protobuf::descriptor::{FileDescriptorProto, FileDescriptorSet};
+use protobuf::reflect::{EnumDescriptor, FileDescriptor, MessageDescriptor, ServiceDescriptor};
+use protobuf::{CodedInputStream, Message, MessageDyn};
+
+use crate::codec::{CodecOptions, LuaProtoCodec};
+use crate::dynamic_message::LuaDynamicMessage;
+use crate::schema;
+
+#[derive(Default)]
+pub struct LuaProtoPool {
+    codec: LuaProtoCodec,
+    file_descriptors: HashMap<String, FileDescriptor>,
+    message_descriptors: HashMap<String, MessageDescriptor>,
+    enum_descriptors: HashMap<String, EnumDescriptor>,
+    service_descriptors: HashMap<String, ServiceDescriptor>,
+}
+
+impl LuaProtoPool {
+    pub fn new(descriptors: Vec<FileDescriptor>) -> Self {
+        let codec = LuaProtoCodec;
+        let mut pool = Self {
+            codec,
+            ..Self::default()
+        };
+        for file_descriptor in descriptors {
+            pool.index_file(file_descriptor);
+        }
+        pool
+    }
+
+    pub fn parse_files(
+        inputs: impl IntoIterator<Item = impl AsRef<Path>>,
+        includes: impl IntoIterator<Item = impl AsRef<Path>>,
+    ) -> anyhow::Result<Self> {
+        let mut parser = protobuf_parse::Parser::new();
+        parser.inputs(inputs).includes(includes);
+
+        #[cfg(feature = "google_protoc")]
+        parser.protoc();
+
+        #[cfg(feature = "vendored_protoc")]
+        parser.protoc_path(
+            &protoc_bin_vendored::protoc_bin_path()
+                .context("unable to find protoc bin vendored")?,
+        );
+
+        let file_protos = parser
+            .parse_and_typecheck()
+            .context("parse proto failed")?
+            .file_descriptors;
+        Self::from_file_protos(file_protos)
+    }
+
+    pub fn parse_proto(proto: impl AsRef<str>) -> anyhow::Result<Self> {
+        let temp_dir = tempfile::tempdir().context("unable to get tempdir")?;
+        let tempfile = temp_dir.path().join("temp.proto");
+        std::fs::write(&tempfile, proto.as_ref()).context("unable to write data to tempfile")?;
+        Self::parse_files([&tempfile], [&temp_dir])
+    }
+
+    pub fn parse_descriptor_path(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let path = path.as_ref();
+        let protos = if path.is_dir() {
+            let mut protos = vec![];
+            for entry in walkdir::WalkDir::new(path)
+                .into_iter()
+                .filter_map(|file| file.ok())
+            {
+                let pb_path = entry.path();
+                if pb_path.extension().map(|e| e == "pb").unwrap_or(false) {
+                    let mut pb_file = std::fs::File::open(pb_path)
+                        .context(format!("failed open {}", pb_path.to_string_lossy()))?;
+                    let mut input = CodedInputStream::new(&mut pb_file);
+                    let proto = FileDescriptorProto::parse_from(&mut input)?;
+                    protos.push(proto);
+                }
+            }
+            protos
+        } else {
+            let bytes = std::fs::read(path).context(format!(
+                "failed read descriptor set {}",
+                path.to_string_lossy()
+            ))?;
+            match FileDescriptorSet::parse_from_bytes(&bytes) {
+                Ok(set) => set.file,
+                Err(_) => vec![FileDescriptorProto::parse_from_bytes(&bytes)?],
+            }
+        };
+        Self::from_file_protos(protos)
+    }
+
+    pub fn list_protos(paths: impl IntoIterator<Item = impl AsRef<Path>>) -> Vec<PathBuf> {
+        let mut protos = Vec::new();
+        for path in paths {
+            for file in walkdir::WalkDir::new(path)
+                .into_iter()
+                .filter_map(|file| file.ok())
+            {
+                let proto_path = file.path();
+                if proto_path
+                    .extension()
+                    .map(|e| e == "proto")
+                    .unwrap_or(false)
+                {
+                    protos.push(proto_path.to_path_buf());
+                }
+            }
+        }
+        protos
+    }
+
+    pub fn encode(
+        &self,
+        message_full_name: &str,
+        lua_message: &Table,
+        options: CodecOptions,
+    ) -> anyhow::Result<Box<dyn MessageDyn>> {
+        let descriptor = self
+            .message_descriptors
+            .get(message_full_name)
+            .ok_or(anyhow!("{} not found", message_full_name))?;
+        self.codec.encode_message(lua_message, descriptor, options)
+    }
+
+    pub fn decode(
+        &self,
+        lua: &Lua,
+        message_full_name: &str,
+        message_bytes: &[u8],
+        options: CodecOptions,
+    ) -> anyhow::Result<Table> {
+        let message = self.decode_box(message_full_name, message_bytes)?;
+        self.codec.decode_message(lua, message.as_ref(), options)
+    }
+
+    fn decode_box(
+        &self,
+        message_full_name: &str,
+        message_bytes: &[u8],
+    ) -> anyhow::Result<Box<dyn MessageDyn>> {
+        let descriptor = self
+            .message_descriptors
+            .get(message_full_name)
+            .ok_or(anyhow!("{} not found", message_full_name))?;
+        descriptor
+            .parse_from_bytes(message_bytes)
+            .map_err(|e| anyhow!(e))
+    }
+
+    fn from_file_protos(protos: Vec<FileDescriptorProto>) -> anyhow::Result<Self> {
+        let file_descriptors = FileDescriptor::new_dynamic_fds(protos, &[])?;
+        Ok(Self::new(file_descriptors))
+    }
+
+    fn index_file(&mut self, file_descriptor: FileDescriptor) {
+        for message_descriptor in file_descriptor.messages() {
+            self.index_message(message_descriptor);
+        }
+        for enum_descriptor in file_descriptor.enums() {
+            self.enum_descriptors
+                .insert(enum_descriptor.full_name().to_string(), enum_descriptor);
+        }
+        for service_descriptor in file_descriptor.services() {
+            self.service_descriptors.insert(
+                service_full_name(file_descriptor.package(), service_descriptor.proto().name()),
+                service_descriptor,
+            );
+        }
+        self.file_descriptors
+            .insert(file_descriptor.name().to_string(), file_descriptor);
+    }
+
+    fn index_message(&mut self, message_descriptor: MessageDescriptor) {
+        for nested_message in message_descriptor.nested_messages() {
+            self.index_message(nested_message);
+        }
+        for nested_enum in message_descriptor.nested_enums() {
+            self.enum_descriptors
+                .insert(nested_enum.full_name().to_string(), nested_enum);
+        }
+        self.message_descriptors.insert(
+            message_descriptor.full_name().to_string(),
+            message_descriptor,
+        );
+    }
+
+    fn codec_options(options: Option<Table>) -> mlua::Result<CodecOptions> {
+        CodecOptions::from_lua_table(options).map_err(|e| anyhow!("{e:?}").into())
+    }
+}
+
+impl LuaUserData for LuaProtoPool {
+    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method(
+            "encode",
+            |lua, pool, (message_full_name, lua_message, options): (String, Table, Option<Table>)| {
+                let options = Self::codec_options(options)?;
+                let message = pool
+                    .encode(&message_full_name, &lua_message, options)
+                    .map_err(|e| anyhow!("{e:?}"))?;
+                let mut message_bytes = Vec::with_capacity(message.compute_size_dyn() as usize);
+                message
+                    .write_to_vec_dyn(&mut message_bytes)
+                    .map_err(|e| anyhow!("{e:?}"))?;
+                lua.create_string(message_bytes)
+            },
+        );
+
+        methods.add_method(
+            "decode",
+            |lua, pool, (message_full_name, message_bytes, options): (String, LuaString, Option<Table>)| {
+                pool.decode(lua, &message_full_name, message_bytes.as_bytes().as_ref(), Self::codec_options(options)?)
+                    .map_err(|e| anyhow!("{e:?}").into())
+            },
+        );
+
+        methods.add_method("new", |_, pool, message_full_name: String| {
+            let descriptor = pool
+                .message_descriptors
+                .get(&message_full_name)
+                .ok_or(anyhow!("{} not found", message_full_name))?;
+            Ok(LuaDynamicMessage::new(descriptor.new_instance()))
+        });
+
+        methods.add_method(
+            "decode_message",
+            |_, pool, (message_full_name, message_bytes): (String, LuaString)| {
+                let message = pool
+                    .decode_box(&message_full_name, message_bytes.as_bytes().as_ref())
+                    .map_err(|e| anyhow!("{e:?}"))?;
+                Ok(LuaDynamicMessage::new(message))
+            },
+        );
+
+        methods.add_method("files", |lua, pool, ()| {
+            let files = lua.create_table()?;
+            for descriptor in pool.file_descriptors.values() {
+                files.push(schema::file_to_table(lua, descriptor)?)?;
+            }
+            Ok(files)
+        });
+
+        methods.add_method("file", |lua, pool, name: String| {
+            match pool.file_descriptors.get(&name) {
+                Some(descriptor) => Ok(Some(schema::file_to_table(lua, descriptor)?)),
+                None => Ok(None),
+            }
+        });
+
+        methods.add_method("messages", |lua, pool, ()| {
+            let messages = lua.create_table()?;
+            for descriptor in pool.message_descriptors.values() {
+                messages.push(schema::message_to_table(lua, descriptor)?)?;
+            }
+            Ok(messages)
+        });
+
+        methods.add_method("message", |lua, pool, name: String| {
+            match pool.message_descriptors.get(&name) {
+                Some(descriptor) => Ok(Some(schema::message_to_table(lua, descriptor)?)),
+                None => Ok(None),
+            }
+        });
+
+        methods.add_method("enums", |lua, pool, ()| {
+            let enums = lua.create_table()?;
+            for descriptor in pool.enum_descriptors.values() {
+                enums.push(schema::enum_to_table(lua, descriptor)?)?;
+            }
+            Ok(enums)
+        });
+
+        methods.add_method("enum", |lua, pool, name: String| {
+            match pool.enum_descriptors.get(&name) {
+                Some(descriptor) => Ok(Some(schema::enum_to_table(lua, descriptor)?)),
+                None => Ok(None),
+            }
+        });
+
+        methods.add_method("services", |lua, pool, ()| {
+            let services = lua.create_table()?;
+            for descriptor in pool.service_descriptors.values() {
+                services.push(schema::service_to_table(lua, descriptor)?)?;
+            }
+            Ok(services)
+        });
+
+        methods.add_method("service", |lua, pool, name: String| {
+            match pool.service_descriptors.get(&name) {
+                Some(descriptor) => Ok(Some(schema::service_to_table(lua, descriptor)?)),
+                None => Ok(None),
+            }
+        });
+    }
+}
+
+pub struct LuaProtoModule;
+
+impl LuaUserData for LuaProtoModule {
+    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_function("load", |_, config: Table| {
+            if let Some(proto) = config.get::<Option<String>>("proto")? {
+                return LuaProtoPool::parse_proto(proto).map_err(|e| anyhow!("{e:?}").into());
+            }
+            if let Some(path) = config.get::<Option<String>>("descriptor_set")? {
+                return LuaProtoPool::parse_descriptor_path(path)
+                    .map_err(|e| anyhow!("{e:?}").into());
+            }
+            let files = config.get::<Option<Vec<String>>>("files")?.ok_or(anyhow!(
+                "load config requires files, proto, or descriptor_set"
+            ))?;
+            let includes = config
+                .get::<Option<Vec<String>>>("includes")?
+                .unwrap_or_else(|| vec![".".to_string()]);
+            LuaProtoPool::parse_files(files, includes).map_err(|e| anyhow!("{e:?}").into())
+        });
+
+        methods.add_function(
+            "load_files",
+            |_, (inputs, includes): (Vec<String>, Vec<String>)| {
+                if inputs.is_empty() {
+                    return Err(anyhow!("inputs must not be empty").into());
+                }
+                if includes.is_empty() {
+                    return Err(anyhow!("includes must not be empty").into());
+                }
+                LuaProtoPool::parse_files(inputs, includes).map_err(|e| anyhow!("{e:?}").into())
+            },
+        );
+
+        methods.add_function("load_proto", |_, proto: String| {
+            LuaProtoPool::parse_proto(proto).map_err(|e| anyhow!("{e:?}").into())
+        });
+
+        methods.add_function("load_descriptor_set", |_, path: String| {
+            LuaProtoPool::parse_descriptor_path(path).map_err(|e| anyhow!("{e:?}").into())
+        });
+
+        methods.add_function("list_protos", |_, paths: Vec<String>| {
+            let protos = LuaProtoPool::list_protos(paths)
+                .iter()
+                .map(|p| p.to_string_lossy().to_string())
+                .collect::<Vec<String>>();
+            Ok(protos)
+        });
+    }
+}
+
+fn service_full_name(package: &str, name: &str) -> String {
+    if package.is_empty() {
+        name.to_string()
+    } else {
+        format!("{package}.{name}")
+    }
+}
+
+#[cfg(all(test, not(feature = "module")))]
+mod tests {
+    use mlua::Lua;
+
+    use super::*;
+    use crate::codec::CodecOptions;
+
+    #[test]
+    fn pool_loads_schema_and_roundtrips_dynamic_messages() -> anyhow::Result<()> {
+        let lua = Lua::new();
+        let pool = LuaProtoPool::parse_proto(
+            r#"
+            syntax = "proto3";
+            package demo;
+
+            enum State {
+              UNKNOWN = 0;
+              ONLINE = 1;
+            }
+
+            message Player {
+              int64 id = 1;
+              string name = 2;
+              State state = 3;
+              bytes payload = 4;
+            }
+            "#,
+        )?;
+
+        let descriptor = pool
+            .message_descriptors
+            .get("demo.Player")
+            .expect("message descriptor");
+        let schema = schema::message_to_table(&lua, descriptor)?;
+        assert_eq!(schema.get::<String>("full_name")?, "demo.Player");
+
+        let input = lua.create_table()?;
+        input.set("id", "9223372036854775807")?;
+        input.set("name", "mikai233")?;
+        input.set("state", "ONLINE")?;
+        input.set("payload", lua.create_string([1_u8, 2, 3])?)?;
+
+        let message = pool.encode("demo.Player", &input, CodecOptions::default())?;
+        let mut bytes = Vec::new();
+        message.write_to_vec_dyn(&mut bytes)?;
+
+        let output = pool.decode(&lua, "demo.Player", &bytes, CodecOptions::default())?;
+        assert_eq!(
+            output.get::<String>("id")?,
+            "9223372036854775807".to_string()
+        );
+        assert_eq!(output.get::<String>("name")?, "mikai233".to_string());
+        assert_eq!(output.get::<String>("state")?, "ONLINE".to_string());
+        assert_eq!(
+            output.get::<mlua::String>("payload")?.as_bytes().as_ref(),
+            &[1, 2, 3]
+        );
+
+        Ok(())
+    }
+}

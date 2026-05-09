@@ -4,7 +4,7 @@ use mlua::prelude::LuaUserData;
 use mlua::{AnyUserData, ErrorContext, MetaMethod, Table, UserDataMethods};
 use protobuf::reflect::MessageDescriptor;
 
-use crate::codec::LuaProtoCodec;
+use crate::codec::{CodecOptions, LuaProtoCodec};
 use crate::descriptor::enum_descriptor::LuaEnumDescriptor;
 use crate::descriptor::field_descriptor::LuaFieldDescriptor;
 use crate::descriptor::file_descriptor::LuaFileDescriptor;
@@ -149,7 +149,7 @@ impl LuaUserData for LuaMessageDescriptor {
                 .parse_from_bytes(bytes.as_slice())
                 .map_err(|e| anyhow!(e))?;
             let codec = LuaProtoCodec;
-            let message = codec.decode_message(lua, message.as_ref())?;
+            let message = codec.decode_message(lua, message.as_ref(), CodecOptions::default())?;
             Ok(message)
         });
     }

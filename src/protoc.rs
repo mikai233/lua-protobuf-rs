@@ -10,7 +10,7 @@ use protobuf::reflect::{
 };
 use protobuf::{CodedInputStream, Message, MessageDyn};
 
-use crate::codec::LuaProtoCodec;
+use crate::codec::{CodecOptions, LuaProtoCodec};
 use crate::descriptor::enum_descriptor::LuaEnumDescriptor;
 use crate::descriptor::file_descriptor::LuaFileDescriptor;
 use crate::descriptor::message_descriptor::LuaMessageDescriptor;
@@ -343,7 +343,9 @@ impl LuaProtoc {
             .message_descriptors
             .get(message_full_name)
             .ok_or(anyhow!("{} not found", message_full_name))?;
-        let message = self.codec.encode_message(lua_message, descriptor)?;
+        let message =
+            self.codec
+                .encode_message(lua_message, descriptor, CodecOptions::default())?;
         Ok(message)
     }
 
@@ -358,7 +360,9 @@ impl LuaProtoc {
             .get(&message_full_name)
             .ok_or(anyhow!("{} not found", message_full_name))?;
         let message = descriptor.parse_from_bytes(message_bytes)?;
-        let lua_message = self.codec.decode_message(lua, message.as_ref())?;
+        let lua_message =
+            self.codec
+                .decode_message(lua, message.as_ref(), CodecOptions::default())?;
         Ok(lua_message)
     }
 
