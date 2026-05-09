@@ -61,6 +61,19 @@ function LuaProtoPool:decode(message_full_name, bytes, options) end
 function LuaProtoPool:validate(message_full_name, message, options) end
 
 ---@param message_full_name string
+---@param message table
+---@param options? LuaProtoCodecOptions
+---@param type_url_prefix? string
+---@return LuaAnyMessage
+function LuaProtoPool:pack_any(message_full_name, message, options, type_url_prefix) end
+
+---@param any LuaAnyMessage
+---@param options? LuaProtoCodecOptions
+---@return string message_full_name
+---@return table message
+function LuaProtoPool:unpack_any(any, options) end
+
+---@param message_full_name string
 ---@param message? table
 ---@param options? LuaProtoCodecOptions
 ---@return LuaDynamicMessage
@@ -169,6 +182,10 @@ function LuaDynamicMessage:encode() end
 ---@field number integer
 ---@field wire_type "varint"|"fixed32"|"fixed64"|"length_delimited"
 ---@field value string|integer
+
+---@class LuaAnyMessage
+---@field type_url string
+---@field value string binary
 
 ---@class LuaFileSchema
 ---@field kind "file"

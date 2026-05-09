@@ -110,6 +110,17 @@ local bytes = pool:encode("com.mikai233.Player", message, {
 })
 ```
 
+`google.protobuf.Any` can be packed and unpacked dynamically:
+
+```lua
+local any = pool:pack_any("com.mikai233.Player", {
+    id = "42",
+})
+
+local type_name, player = pool:unpack_any(any)
+print(type_name, player.id)
+```
+
 Use `validate` when you want to check a table without keeping the encoded bytes:
 
 ```lua

@@ -184,6 +184,19 @@ impl LuaProtoPool {
         self.codec.encode_message(lua_message, descriptor, options)
     }
 
+    fn encode_bytes(
+        &self,
+        message_full_name: &str,
+        lua_message: &Table,
+        options: CodecOptions,
+    ) -> anyhow::Result<Vec<u8>> {
+        let message = self.encode(message_full_name, lua_message, options)?;
+        self.codec.check_required_fields(message.as_ref())?;
+        let mut message_bytes = Vec::with_capacity(message.compute_size_dyn() as usize);
+        message.write_to_vec_dyn(&mut message_bytes)?;
+        Ok(message_bytes)
+    }
+
     pub fn decode(
         &self,
         lua: &Lua,
@@ -257,15 +270,8 @@ impl LuaUserData for LuaProtoPool {
             "encode",
             |lua, pool, (message_full_name, lua_message, options): (String, Table, Option<Table>)| {
                 let options = Self::codec_options(options)?;
-                let message = pool
-                    .encode(&message_full_name, &lua_message, options)
-                    .map_err(|e| anyhow!("{e:?}"))?;
-                pool.codec
-                    .check_required_fields(message.as_ref())
-                    .map_err(|e| anyhow!("{e:?}"))?;
-                let mut message_bytes = Vec::with_capacity(message.compute_size_dyn() as usize);
-                message
-                    .write_to_vec_dyn(&mut message_bytes)
+                let message_bytes = pool
+                    .encode_bytes(&message_full_name, &lua_message, options)
                     .map_err(|e| anyhow!("{e:?}"))?;
                 lua.create_string(message_bytes)
             },
@@ -292,6 +298,51 @@ impl LuaUserData for LuaProtoPool {
                     Ok(()) => Ok((true, None::<String>)),
                     Err(e) => Ok((false, Some(format!("{e:?}")))),
                 }
+            },
+        );
+
+        methods.add_method(
+            "pack_any",
+            |lua,
+             pool,
+             (message_full_name, lua_message, options, type_url_prefix): (
+                String,
+                Table,
+                Option<Table>,
+                Option<String>,
+            )| {
+                let options = Self::codec_options(options)?;
+                let bytes = pool
+                    .encode_bytes(&message_full_name, &lua_message, options)
+                    .map_err(|e| anyhow!("{e:?}"))?;
+                let type_url_prefix =
+                    type_url_prefix.unwrap_or_else(|| "type.googleapis.com".to_string());
+                let any = lua.create_table()?;
+                any.set("type_url", format!("{type_url_prefix}/{message_full_name}"))?;
+                any.set("value", lua.create_string(bytes)?)?;
+                Ok(any)
+            },
+        );
+
+        methods.add_method(
+            "unpack_any",
+            |lua, pool, (any, options): (Table, Option<Table>)| {
+                let type_url = any.get::<String>("type_url")?;
+                let message_full_name = type_url
+                    .rsplit('/')
+                    .next()
+                    .filter(|name| !name.is_empty())
+                    .ok_or(anyhow!("invalid Any type_url: {type_url}"))?;
+                let value = any.get::<LuaString>("value")?;
+                let message = pool
+                    .decode(
+                        lua,
+                        message_full_name,
+                        value.as_bytes().as_ref(),
+                        Self::codec_options(options)?,
+                    )
+                    .map_err(|e| anyhow!("{e:?}"))?;
+                Ok((message_full_name.to_string(), message))
             },
         );
 
@@ -696,6 +747,26 @@ mod tests {
             ]]
 
             local pool = pb.load({ proto = proto })
+
+            local any = pool:pack_any("demo.Player", {
+                id = "42",
+                name = "packed",
+            })
+            assert(any.type_url == "type.googleapis.com/demo.Player")
+            assert(type(any.value) == "string")
+
+            local packed_name, packed = pool:unpack_any(any)
+            assert(packed_name == "demo.Player")
+            assert(packed.id == "42")
+            assert(packed.name == "packed")
+
+            local custom_any = pool:pack_any("demo.Player", {
+                id = "43",
+            }, nil, "example.com/types")
+            assert(custom_any.type_url == "example.com/types/demo.Player")
+            local custom_name, custom_packed = pool:unpack_any(custom_any)
+            assert(custom_name == "demo.Player")
+            assert(custom_packed.id == "43")
 
             local empty_bytes = pool:encode("demo.Player", {})
             local sparse = pool:decode("demo.Player", empty_bytes)

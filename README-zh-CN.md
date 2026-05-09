@@ -106,6 +106,17 @@ local bytes = pool:encode("com.mikai233.Player", message, {
 })
 ```
 
+可以动态 pack/unpack `google.protobuf.Any`：
+
+```lua
+local any = pool:pack_any("com.mikai233.Player", {
+    id = "42",
+})
+
+local type_name, player = pool:unpack_any(any)
+print(type_name, player.id)
+```
+
 如果只想校验 table 而不关心编码后的二进制，可以使用 `validate`：
 
 ```lua
