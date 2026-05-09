@@ -87,6 +87,8 @@ local pool = pb.load_descriptor_set("proto.pb")
 - `bytes` 使用 Lua binary string
 - enum 默认使用名字，例如 `"ONLINE"`
 - encode 遇到未知字段默认报错
+- 一次 encode 输入里同时设置同一个 `oneof` 的多个字段默认报错
+- 写出二进制前会递归校验 proto2 `required` 字段
 
 可以通过选项调整：
 
@@ -100,6 +102,7 @@ local message = pool:decode("com.mikai233.Player", bytes, {
 
 local bytes = pool:encode("com.mikai233.Player", message, {
     unknown = "ignore",
+    oneof = "last",
 })
 ```
 

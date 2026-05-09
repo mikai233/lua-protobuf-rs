@@ -260,6 +260,9 @@ impl LuaUserData for LuaProtoPool {
                 let message = pool
                     .encode(&message_full_name, &lua_message, options)
                     .map_err(|e| anyhow!("{e:?}"))?;
+                pool.codec
+                    .check_required_fields(message.as_ref())
+                    .map_err(|e| anyhow!("{e:?}"))?;
                 let mut message_bytes = Vec::with_capacity(message.compute_size_dyn() as usize);
                 message
                     .write_to_vec_dyn(&mut message_bytes)
@@ -280,8 +283,13 @@ impl LuaUserData for LuaProtoPool {
             "validate",
             |_, pool, (message_full_name, lua_message, options): (String, Table, Option<Table>)| {
                 let options = Self::codec_options(options)?;
-                match pool.encode(&message_full_name, &lua_message, options) {
-                    Ok(_) => Ok((true, None::<String>)),
+                match pool
+                    .encode(&message_full_name, &lua_message, options)
+                    .and_then(|message| {
+                        pool.codec.check_required_fields(message.as_ref())?;
+                        Ok(())
+                    }) {
+                    Ok(()) => Ok((true, None::<String>)),
                     Err(e) => Ok((false, Some(format!("{e:?}")))),
                 }
             },
@@ -725,6 +733,23 @@ mod tests {
             end)
             assert(ok == false)
 
+            local oneof_valid, oneof_error = pool:validate("demo.Player", {
+                email = "dev@example.com",
+                phone = "123",
+            })
+            assert(oneof_valid == false, tostring(oneof_error))
+            assert(oneof_error:find("oneof contact", 1, true) ~= nil, oneof_error)
+            assert(oneof_error:find("demo.Player.", 1, true) ~= nil, oneof_error)
+
+            local oneof_bytes = pool:encode("demo.Player", {
+                email = "dev@example.com",
+                phone = "123",
+            }, {
+                oneof = "last",
+            })
+            local oneof_decoded = pool:decode("demo.Player", oneof_bytes)
+            assert((oneof_decoded.email ~= nil) ~= (oneof_decoded.phone ~= nil))
+
             local valid, validation_error = pool:validate("demo.Player", {
                 attrs = { hp = {} },
             })
@@ -753,6 +778,78 @@ mod tests {
             }))
             assert(ignored.name == "kept")
             assert(ignored.unknown_field == nil)
+            "#,
+        )
+        .exec()?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn lua_required_fields_are_validated_with_paths() -> anyhow::Result<()> {
+        let lua = Lua::new();
+        let module = lua.create_proxy::<LuaProtoModule>()?;
+        lua.globals().set("pb", module)?;
+
+        lua.load(
+            r#"
+            local proto = [[
+            syntax = "proto2";
+            package demo;
+
+            message Child {
+              required int32 id = 1;
+            }
+
+            message Parent {
+              required string name = 1;
+              optional Child child = 2;
+              repeated Child children = 3;
+            }
+            ]]
+
+            local pool = pb.load_proto(proto)
+
+            local missing_parent, parent_error = pool:validate("demo.Parent", {})
+            assert(missing_parent == false, tostring(parent_error))
+            assert(parent_error:find("demo.Parent.name", 1, true) ~= nil, parent_error)
+
+            local missing_child, child_error = pool:validate("demo.Parent", {
+                name = "parent",
+                child = {},
+            })
+            assert(missing_child == false, tostring(child_error))
+            assert(child_error:find("demo.Parent.child.id", 1, true) ~= nil, child_error)
+
+            local missing_repeated, repeated_error = pool:validate("demo.Parent", {
+                name = "parent",
+                children = { {} },
+            })
+            assert(missing_repeated == false, tostring(repeated_error))
+            assert(repeated_error:find("demo.Parent.children[1].id", 1, true) ~= nil, repeated_error)
+
+            local valid, valid_error = pool:validate("demo.Parent", {
+                name = "parent",
+                child = { id = 1 },
+                children = { { id = 2 } },
+            })
+            assert(valid == true, tostring(valid_error))
+            assert(valid_error == nil)
+
+            local encode_ok, encode_error = pcall(function()
+                pool:encode("demo.Parent", { name = "parent", child = {} })
+            end)
+            assert(encode_ok == false)
+            assert(tostring(encode_error):find("demo.Parent.child.id", 1, true) ~= nil, tostring(encode_error))
+
+            local msg = pool:new("demo.Parent")
+            msg:set("name", "parent")
+            msg:set("child", {})
+            local dynamic_ok, dynamic_error = pcall(function()
+                msg:encode()
+            end)
+            assert(dynamic_ok == false)
+            assert(tostring(dynamic_error):find("demo.Parent.child.id", 1, true) ~= nil, tostring(dynamic_error))
             "#,
         )
         .exec()?;

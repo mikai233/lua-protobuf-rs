@@ -214,6 +214,10 @@ impl LuaUserData for LuaDynamicMessage {
         });
 
         methods.add_method("encode", |lua, this, ()| {
+            let codec = LuaProtoCodec;
+            codec
+                .check_required_fields(this.message.as_ref())
+                .map_err(|e| anyhow!("{e:?}"))?;
             let mut bytes = Vec::with_capacity(this.message.compute_size_dyn() as usize);
             this.message
                 .write_to_vec_dyn(&mut bytes)

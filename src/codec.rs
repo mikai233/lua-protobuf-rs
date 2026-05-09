@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 
 use anyhow::{Context, anyhow};
@@ -34,12 +34,19 @@ pub enum UnknownFieldMode {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum OneofMode {
+    Error,
+    Last,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct CodecOptions {
     pub defaults: bool,
     pub int64: Int64Mode,
     pub bytes: BytesMode,
     pub enum_mode: EnumMode,
     pub unknown_fields: UnknownFieldMode,
+    pub oneof: OneofMode,
 }
 
 impl Default for CodecOptions {
@@ -50,6 +57,7 @@ impl Default for CodecOptions {
             bytes: BytesMode::String,
             enum_mode: EnumMode::Name,
             unknown_fields: UnknownFieldMode::Error,
+            oneof: OneofMode::Error,
         }
     }
 }
@@ -92,6 +100,13 @@ impl CodecOptions {
                 _ => return Err(anyhow!("unknown unknown-field mode: {unknown}")),
             };
         }
+        if let Some(oneof) = table.get::<Option<String>>("oneof")? {
+            options.oneof = match oneof.as_str() {
+                "error" => OneofMode::Error,
+                "last" => OneofMode::Last,
+                _ => return Err(anyhow!("unknown oneof mode: {oneof}")),
+            };
+        }
         Ok(options)
     }
 }
@@ -118,6 +133,7 @@ impl LuaProtoCodec {
     ) -> anyhow::Result<Box<dyn MessageDyn>> {
         let name = descriptor.full_name();
         let mut message = descriptor.new_instance();
+        let mut seen_oneofs = HashMap::<String, String>::new();
         for pair in lua_message.pairs::<Value, Value>() {
             let (field_key, field_value) = pair?;
             let field_key = field_key
@@ -141,6 +157,20 @@ impl LuaProtoCodec {
             if field_value.is_nil() {
                 field_descriptor.clear_field(message.as_mut());
                 continue;
+            }
+            if let Some(oneof) = field_descriptor.containing_oneof() {
+                let oneof_name = oneof.name().to_string();
+                if let Some(previous_path) = seen_oneofs.get(&oneof_name) {
+                    if options.oneof == OneofMode::Error {
+                        return Err(anyhow!(
+                            "{}: oneof {} already set by {}",
+                            field_path,
+                            oneof_name,
+                            previous_path
+                        ));
+                    }
+                }
+                seen_oneofs.insert(oneof_name, field_path.clone());
             }
             match field_descriptor.runtime_field_type() {
                 RuntimeFieldType::Singular(ty) => {
@@ -177,6 +207,46 @@ impl LuaProtoCodec {
             }
         }
         Ok(message)
+    }
+
+    pub fn check_required_fields(&self, message: &dyn MessageDyn) -> anyhow::Result<()> {
+        Self::check_required_fields_at(message, message.descriptor_dyn().full_name())
+    }
+
+    fn check_required_fields_at(message: &dyn MessageDyn, path: &str) -> anyhow::Result<()> {
+        let descriptor = message.descriptor_dyn();
+        for field in descriptor.fields() {
+            let field_path = format!("{path}.{}", field.name());
+            if field.is_required() && !field.has_field(message) {
+                return Err(anyhow!("{}: required field is missing", field_path));
+            }
+            match field.runtime_field_type() {
+                RuntimeFieldType::Singular(_) => {
+                    if let Some(ReflectValueRef::Message(value)) = field.get_singular(message) {
+                        Self::check_required_fields_at(value.deref(), &field_path)?;
+                    }
+                }
+                RuntimeFieldType::Repeated(_) => {
+                    for (index, value) in field.get_repeated(message).into_iter().enumerate() {
+                        if let ReflectValueRef::Message(value) = value {
+                            let value_path = format!("{}[{}]", field_path, index + 1);
+                            Self::check_required_fields_at(value.deref(), &value_path)?;
+                        }
+                    }
+                }
+                RuntimeFieldType::Map(_, _) => {
+                    let map = field.get_map(message);
+                    for (key, value) in &map {
+                        if let ReflectValueRef::Message(value) = value {
+                            let value_path =
+                                format!("{}[{}]", field_path, Self::reflect_key_label(key));
+                            Self::check_required_fields_at(value.deref(), &value_path)?;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn decode_message(
@@ -483,6 +553,18 @@ impl LuaProtoCodec {
             Value::Number(n) => n.to_string(),
             Value::Boolean(b) => b.to_string(),
             _ => format!("<{}>", LuaProtoCodec.fmt_value(value)),
+        }
+    }
+
+    fn reflect_key_label(value: ReflectValueRef) -> String {
+        match value {
+            ReflectValueRef::String(s) => format!("{s:?}"),
+            ReflectValueRef::Bytes(bytes) => format!("{bytes:?}"),
+            ReflectValueRef::Enum(descriptor, number) => match descriptor.value_by_number(number) {
+                Some(value) => value.name().to_string(),
+                None => number.to_string(),
+            },
+            _ => value.to_string(),
         }
     }
 }

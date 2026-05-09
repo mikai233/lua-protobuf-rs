@@ -91,6 +91,8 @@ Default behavior is optimized for Lua runtime usage:
 - `bytes` values use Lua binary strings
 - enums use names by default, for example `"ONLINE"`
 - unknown fields during encode are rejected by default
+- multiple fields from the same `oneof` in one encode input are rejected by default
+- proto2 `required` fields are validated recursively before writing bytes
 
 Options can override these defaults:
 
@@ -104,6 +106,7 @@ local message = pool:decode("com.mikai233.Player", bytes, {
 
 local bytes = pool:encode("com.mikai233.Player", message, {
     unknown = "ignore",
+    oneof = "last",
 })
 ```
 

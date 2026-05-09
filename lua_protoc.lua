@@ -15,6 +15,7 @@ local pb = {}
 ---@field bytes? "string"|"table"
 ---@field enum? "name"|"number"
 ---@field unknown? "error"|"ignore"
+---@field oneof? "error"|"last"
 
 ---@param config LuaProtoLoadConfig
 ---@return LuaProtoPool
