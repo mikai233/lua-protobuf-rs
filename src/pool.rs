@@ -435,4 +435,222 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn lua_module_proxy_exercises_public_pool_api() -> anyhow::Result<()> {
+        let lua = Lua::new();
+        let module = lua.create_proxy::<LuaProtoModule>()?;
+        lua.globals().set("pb", module)?;
+
+        lua.load(
+            r#"
+            local proto = [[
+            syntax = "proto3";
+            package demo;
+
+            enum State {
+              UNKNOWN = 0;
+              ONLINE = 1;
+            }
+
+            message Player {
+              int64 id = 1;
+              string name = 2;
+              State state = 3;
+              bytes payload = 4;
+              repeated int32 scores = 5;
+              map<string, int64> attrs = 6;
+              oneof contact {
+                string email = 7;
+                string phone = 8;
+              }
+            }
+            ]]
+
+            local pool = pb.load_proto(proto)
+            local bytes = pool:encode("demo.Player", {
+                id = "9223372036854775807",
+                name = "mikai233",
+                state = "ONLINE",
+                payload = "\1\2\3",
+                scores = { 7, 8 },
+                attrs = { hp = "99" },
+                email = "dev@example.com",
+            })
+
+            assert(type(bytes) == "string")
+
+            local player = pool:decode("demo.Player", bytes)
+            assert(player.id == "9223372036854775807")
+            assert(player.name == "mikai233")
+            assert(player.state == "ONLINE")
+            assert(player.payload == "\1\2\3")
+            assert(player.scores[1] == 7)
+            assert(player.attrs.hp == "99")
+            assert(player.email == "dev@example.com")
+
+            local desc = pool:message("demo.Player")
+            assert(desc.full_name == "demo.Player")
+            assert(#desc.fields == 8)
+            assert(desc.fields[1].name == "id")
+            assert(desc.fields[1].type == "int64")
+
+            local state = pool:enum("demo.State")
+            assert(state.values[2].name == "ONLINE")
+            assert(state.values[2].number == 1)
+            "#,
+        )
+        .exec()?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn lua_codec_options_are_stable() -> anyhow::Result<()> {
+        let lua = Lua::new();
+        let module = lua.create_proxy::<LuaProtoModule>()?;
+        lua.globals().set("pb", module)?;
+
+        lua.load(
+            r#"
+            local proto = [[
+            syntax = "proto3";
+            package demo;
+
+            enum State {
+              UNKNOWN = 0;
+              ONLINE = 1;
+            }
+
+            message Player {
+              int64 id = 1;
+              string name = 2;
+              State state = 3;
+              bytes payload = 4;
+              repeated int32 scores = 5;
+              map<string, int64> attrs = 6;
+              oneof contact {
+                string email = 7;
+                string phone = 8;
+              }
+            }
+            ]]
+
+            local pool = pb.load({ proto = proto })
+
+            local empty_bytes = pool:encode("demo.Player", {})
+            local sparse = pool:decode("demo.Player", empty_bytes)
+            assert(sparse.id == nil)
+            assert(sparse.name == nil)
+            assert(sparse.scores == nil)
+            assert(sparse.attrs == nil)
+            assert(sparse.email == nil)
+
+            local with_defaults = pool:decode("demo.Player", empty_bytes, {
+                defaults = true,
+                enum = "number",
+                int64 = "integer",
+            })
+            assert(with_defaults.id == 0)
+            assert(with_defaults.name == "")
+            assert(with_defaults.state == 0)
+            assert(type(with_defaults.scores) == "table" and #with_defaults.scores == 0)
+            assert(type(with_defaults.attrs) == "table")
+            assert(with_defaults.email == nil)
+
+            local table_bytes = pool:encode("demo.Player", {
+                id = 42,
+                state = 1,
+                payload = { 9, 8, 7 },
+                attrs = { hp = 100 },
+            }, {
+                bytes = "table",
+                enum = "number",
+                int64 = "integer",
+            })
+            local table_decoded = pool:decode("demo.Player", table_bytes, {
+                bytes = "table",
+                enum = "number",
+                int64 = "integer",
+            })
+            assert(table_decoded.id == 42)
+            assert(table_decoded.state == 1)
+            assert(table_decoded.payload[1] == 9)
+            assert(table_decoded.payload[3] == 7)
+            assert(table_decoded.attrs.hp == 100)
+
+            local ok = pcall(function()
+                pool:encode("demo.Player", { unknown_field = 1 })
+            end)
+            assert(ok == false)
+
+            local ignored = pool:decode("demo.Player", pool:encode("demo.Player", {
+                unknown_field = 1,
+                name = "kept",
+            }, {
+                unknown = "ignore",
+            }))
+            assert(ignored.name == "kept")
+            assert(ignored.unknown_field == nil)
+            "#,
+        )
+        .exec()?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn lua_dynamic_message_api_roundtrips_fields() -> anyhow::Result<()> {
+        let lua = Lua::new();
+        let module = lua.create_proxy::<LuaProtoModule>()?;
+        lua.globals().set("pb", module)?;
+
+        lua.load(
+            r#"
+            local proto = [[
+            syntax = "proto3";
+            package demo;
+
+            message Player {
+              int64 id = 1;
+              string name = 2;
+              repeated int32 scores = 3;
+              map<string, int64> attrs = 4;
+            }
+            ]]
+
+            local pool = pb.load_proto(proto)
+            local msg = pool:new("demo.Player")
+            assert(msg:type_name() == "demo.Player")
+            assert(msg:has("name") == false)
+
+            msg:set("id", "123")
+            msg:set("name", "mikai233")
+            msg:set("scores", { 1, 2, 3 })
+            msg:set("attrs", { hp = "99" })
+
+            assert(msg:has("name") == true)
+            assert(msg:get("id") == "123")
+            assert(msg:get("scores")[3] == 3)
+            assert(msg:get("attrs").hp == "99")
+
+            local table_value = msg:to_table()
+            assert(table_value.name == "mikai233")
+            assert(table_value.attrs.hp == "99")
+
+            msg:clear("name")
+            assert(msg:has("name") == false)
+            assert(msg:get("name") == nil)
+
+            local bytes = msg:encode()
+            local decoded = pool:decode("demo.Player", bytes)
+            assert(decoded.id == "123")
+            assert(decoded.name == nil)
+            assert(decoded.scores[2] == 2)
+            "#,
+        )
+        .exec()?;
+
+        Ok(())
+    }
 }
