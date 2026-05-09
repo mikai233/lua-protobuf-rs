@@ -43,6 +43,24 @@ impl LuaUserData for LuaDynamicMessage {
             Ok(field.has_field(this.message.as_ref()))
         });
 
+        methods.add_method("which_oneof", |_, this, oneof_name: String| {
+            let descriptor = this.message.descriptor_dyn();
+            let oneof = descriptor
+                .oneofs()
+                .find(|oneof| oneof.name() == oneof_name)
+                .ok_or(anyhow!(
+                    "oneof {} not found in {}",
+                    oneof_name,
+                    descriptor.full_name()
+                ))?;
+            for field in oneof.fields() {
+                if field.has_field(this.message.as_ref()) {
+                    return Ok(Some(field.name().to_string()));
+                }
+            }
+            Ok(None::<String>)
+        });
+
         methods.add_method(
             "get",
             |lua, this, (field_name, options): (String, Option<Table>)| {
@@ -186,6 +204,34 @@ impl LuaUserData for LuaDynamicMessage {
             },
         );
 
+        methods.add_method_mut("clear_oneof", |_, this, oneof_name: String| {
+            let descriptor = this.message.descriptor_dyn();
+            let oneof = descriptor
+                .oneofs()
+                .find(|oneof| oneof.name() == oneof_name)
+                .ok_or(anyhow!(
+                    "oneof {} not found in {}",
+                    oneof_name,
+                    descriptor.full_name()
+                ))?;
+            for field in oneof.fields() {
+                field.clear_field(this.message.as_mut());
+            }
+            Ok(())
+        });
+
+        methods.add_method_mut(
+            "merge",
+            |_, this, (lua_message, options): (Table, Option<Table>)| {
+                let options = Self::codec_options(options)?;
+                let codec = LuaProtoCodec;
+                codec
+                    .merge_message(&lua_message, this.message.as_mut(), options)
+                    .map_err(|e| anyhow!("{e:?}"))?;
+                Ok(())
+            },
+        );
+
         methods.add_method_mut("clear", |_, this, field_name: Option<String>| {
             let Some(field_name) = field_name else {
                 for field in this.message.descriptor_dyn().fields() {
@@ -211,6 +257,14 @@ impl LuaUserData for LuaDynamicMessage {
             codec
                 .decode_message(lua, this.message.as_ref(), options)
                 .map_err(|e| anyhow!("{e:?}").into())
+        });
+
+        methods.add_method("validate", |_, this, ()| {
+            let codec = LuaProtoCodec;
+            match codec.check_required_fields(this.message.as_ref()) {
+                Ok(()) => Ok((true, None::<String>)),
+                Err(e) => Ok((false, Some(format!("{e:?}")))),
+            }
         });
 
         methods.add_method("encode", |lua, this, ()| {

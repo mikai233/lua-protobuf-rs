@@ -131,8 +131,36 @@ impl LuaProtoCodec {
         options: CodecOptions,
         path: &str,
     ) -> anyhow::Result<Box<dyn MessageDyn>> {
-        let name = descriptor.full_name();
         let mut message = descriptor.new_instance();
+        self.merge_message_at(lua_message, message.as_mut(), descriptor, options, path)?;
+        Ok(message)
+    }
+
+    pub fn merge_message(
+        &self,
+        lua_message: &Table,
+        message: &mut dyn MessageDyn,
+        options: CodecOptions,
+    ) -> anyhow::Result<()> {
+        let descriptor = message.descriptor_dyn();
+        self.merge_message_at(
+            lua_message,
+            message,
+            &descriptor,
+            options,
+            descriptor.full_name(),
+        )
+    }
+
+    fn merge_message_at(
+        &self,
+        lua_message: &Table,
+        message: &mut dyn MessageDyn,
+        descriptor: &MessageDescriptor,
+        options: CodecOptions,
+        path: &str,
+    ) -> anyhow::Result<()> {
+        let name = descriptor.full_name();
         let mut seen_oneofs = HashMap::<String, String>::new();
         for pair in lua_message.pairs::<Value, Value>() {
             let (field_key, field_value) = pair?;
@@ -155,7 +183,7 @@ impl LuaProtoCodec {
                 }
             };
             if field_value.is_nil() {
-                field_descriptor.clear_field(message.as_mut());
+                field_descriptor.clear_field(message);
                 continue;
             }
             if let Some(oneof) = field_descriptor.containing_oneof() {
@@ -175,10 +203,10 @@ impl LuaProtoCodec {
             match field_descriptor.runtime_field_type() {
                 RuntimeFieldType::Singular(ty) => {
                     let boxed_value = self.box_value_at(&field_path, &ty, field_value, options)?;
-                    field_descriptor.set_singular_field(message.as_mut(), boxed_value);
+                    field_descriptor.set_singular_field(message, boxed_value);
                 }
                 RuntimeFieldType::Repeated(ty) => {
-                    let mut field_repeated = field_descriptor.mut_repeated(message.as_mut());
+                    let mut field_repeated = field_descriptor.mut_repeated(message);
                     let table = field_value
                         .as_table()
                         .ok_or(anyhow!("{} expects a table", field_path,))?;
@@ -190,7 +218,7 @@ impl LuaProtoCodec {
                     }
                 }
                 RuntimeFieldType::Map(k_ty, v_ty) => {
-                    let mut field_map = field_descriptor.mut_map(message.as_mut());
+                    let mut field_map = field_descriptor.mut_map(message);
                     let table = field_value
                         .as_table()
                         .ok_or(anyhow!("{} expects a table", field_path,))?;
@@ -206,7 +234,7 @@ impl LuaProtoCodec {
                 }
             }
         }
-        Ok(message)
+        Ok(())
     }
 
     pub fn check_required_fields(&self, message: &dyn MessageDyn) -> anyhow::Result<()> {

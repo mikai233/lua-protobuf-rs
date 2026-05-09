@@ -61,8 +61,10 @@ function LuaProtoPool:decode(message_full_name, bytes, options) end
 function LuaProtoPool:validate(message_full_name, message, options) end
 
 ---@param message_full_name string
+---@param message? table
+---@param options? LuaProtoCodecOptions
 ---@return LuaDynamicMessage
-function LuaProtoPool:new(message_full_name) end
+function LuaProtoPool:new(message_full_name, message, options) end
 
 ---@param message_full_name string
 ---@param bytes string binary
@@ -122,6 +124,10 @@ function LuaDynamicMessage:descriptor() end
 ---@return boolean
 function LuaDynamicMessage:has(field_name) end
 
+---@param oneof_name string
+---@return string?
+function LuaDynamicMessage:which_oneof(oneof_name) end
+
 ---@param field_name string
 ---@param options? LuaProtoCodecOptions
 ---@return any
@@ -135,9 +141,20 @@ function LuaDynamicMessage:set(field_name, value, options) end
 ---@param field_name? string
 function LuaDynamicMessage:clear(field_name) end
 
+---@param oneof_name string
+function LuaDynamicMessage:clear_oneof(oneof_name) end
+
+---@param message table
+---@param options? LuaProtoCodecOptions
+function LuaDynamicMessage:merge(message, options) end
+
 ---@param options? LuaProtoCodecOptions
 ---@return table
 function LuaDynamicMessage:to_table(options) end
+
+---@return boolean ok
+---@return string? err
+function LuaDynamicMessage:validate() end
 
 ---@return string binary
 function LuaDynamicMessage:encode() end

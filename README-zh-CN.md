@@ -142,13 +142,18 @@ end
 动态 message userdata 可用于按字段操作：
 
 ```lua
-local msg = pool:new("com.mikai233.Player")
+local msg = pool:new("com.mikai233.Player", {
+    id = "2347239423213",
+})
 
-msg:set("id", "2347239423213")
 msg:set("nickname", "mikai233")
+msg:merge({ email = "dev@example.com" })
 
 print(msg:has("nickname"))
 print(msg:get("id"))
+print(msg:which_oneof("contact"))
+
+local ok, err = msg:validate()
 
 local bytes = msg:encode()
 local table_value = msg:to_table()

@@ -295,13 +295,23 @@ impl LuaUserData for LuaProtoPool {
             },
         );
 
-        methods.add_method("new", |_, pool, message_full_name: String| {
-            let descriptor = pool
-                .message_descriptors
-                .get(&message_full_name)
-                .ok_or(anyhow!("{} not found", message_full_name))?;
-            Ok(LuaDynamicMessage::new(descriptor.new_instance()))
-        });
+        methods.add_method(
+            "new",
+            |_, pool, (message_full_name, lua_message, options): (String, Option<Table>, Option<Table>)| {
+                let descriptor = pool
+                    .message_descriptors
+                    .get(&message_full_name)
+                    .ok_or(anyhow!("{} not found", message_full_name))?;
+                let mut message = descriptor.new_instance();
+                if let Some(lua_message) = lua_message {
+                    let options = Self::codec_options(options)?;
+                    pool.codec
+                        .merge_message(&lua_message, message.as_mut(), options)
+                        .map_err(|e| anyhow!("{e:?}"))?;
+                }
+                Ok(LuaDynamicMessage::new(message))
+            },
+        );
 
         methods.add_method(
             "decode_message",
@@ -845,6 +855,9 @@ mod tests {
             local msg = pool:new("demo.Parent")
             msg:set("name", "parent")
             msg:set("child", {})
+            local msg_valid, msg_error = msg:validate()
+            assert(msg_valid == false, tostring(msg_error))
+            assert(tostring(msg_error):find("demo.Parent.child.id", 1, true) ~= nil, tostring(msg_error))
             local dynamic_ok, dynamic_error = pcall(function()
                 msg:encode()
             end)
@@ -874,31 +887,62 @@ mod tests {
               string name = 2;
               repeated int32 scores = 3;
               map<string, int64> attrs = 4;
+              oneof contact {
+                string email = 5;
+                string phone = 6;
+              }
             }
             ]]
 
             local pool = pb.load_proto(proto)
-            local msg = pool:new("demo.Player")
+            local msg = pool:new("demo.Player", {
+                id = "123",
+                name = "mikai233",
+            })
             assert(msg:type_name() == "demo.Player")
-            assert(msg:has("name") == false)
+            assert(msg:has("name") == true)
 
-            msg:set("id", "123")
-            msg:set("name", "mikai233")
             msg:set("scores", { 1, 2, 3 })
             msg:set("attrs", { hp = "99" })
+            msg:merge({ email = "dev@example.com" })
 
             assert(msg:has("name") == true)
             assert(msg:get("id") == "123")
             assert(msg:get("scores")[3] == 3)
             assert(msg:get("attrs").hp == "99")
+            assert(msg:which_oneof("contact") == "email")
 
             local table_value = msg:to_table()
             assert(table_value.name == "mikai233")
             assert(table_value.attrs.hp == "99")
+            assert(table_value.email == "dev@example.com")
 
             msg:clear("name")
             assert(msg:has("name") == false)
             assert(msg:get("name") == nil)
+
+            msg:clear_oneof("contact")
+            assert(msg:which_oneof("contact") == nil)
+
+            msg:merge({
+                email = "dev@example.com",
+                phone = "123",
+            }, {
+                oneof = "last",
+            })
+            assert(msg:which_oneof("contact") ~= nil)
+
+            local strict_ok = pcall(function()
+                msg:merge({
+                    email = "dev@example.com",
+                    phone = "123",
+                })
+            end)
+            assert(strict_ok == false)
+
+            local valid, validation_error = msg:validate()
+            assert(valid == true, tostring(validation_error))
+            assert(validation_error == nil)
 
             local bytes = msg:encode()
             local decoded = pool:decode("demo.Player", bytes)
