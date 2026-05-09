@@ -39,22 +39,55 @@ impl LuaProtoPool {
         inputs: impl IntoIterator<Item = impl AsRef<Path>>,
         includes: impl IntoIterator<Item = impl AsRef<Path>>,
     ) -> anyhow::Result<Self> {
+        let inputs = inputs
+            .into_iter()
+            .map(|input| input.as_ref().to_path_buf())
+            .collect::<Vec<_>>();
+        let includes = includes
+            .into_iter()
+            .map(|include| include.as_ref().to_path_buf())
+            .collect::<Vec<_>>();
+
         let mut parser = protobuf_parse::Parser::new();
-        parser.inputs(inputs).includes(includes);
+        parser.inputs(&inputs).includes(&includes);
 
         #[cfg(feature = "google_protoc")]
         parser.protoc();
 
         #[cfg(feature = "vendored_protoc")]
-        parser.protoc_path(
-            &protoc_bin_vendored::protoc_bin_path()
-                .context("unable to find protoc bin vendored")?,
-        );
+        parser
+            .include(
+                protoc_bin_vendored::include_path()
+                    .context("unable to find protoc include path vendored")?,
+            )
+            .protoc()
+            .protoc_path(
+                &protoc_bin_vendored::protoc_bin_path()
+                    .context("unable to find protoc bin vendored")?,
+            );
 
-        let file_protos = parser
-            .parse_and_typecheck()
-            .context("parse proto failed")?
-            .file_descriptors;
+        let file_protos = match parser.parse_and_typecheck() {
+            Ok(parsed) => parsed.file_descriptors,
+            Err(parse_error) => {
+                let mut parser = protobuf_parse::Parser::new();
+                parser
+                    .inputs(&inputs)
+                    .includes(&includes)
+                    .include(
+                        protoc_bin_vendored::include_path()
+                            .context("unable to find protoc include path vendored")?,
+                    )
+                    .protoc()
+                    .protoc_path(
+                        &protoc_bin_vendored::protoc_bin_path()
+                            .context("unable to find protoc bin vendored")?,
+                    );
+                parser
+                    .parse_and_typecheck()
+                    .with_context(|| format!("parse proto failed: {parse_error:?}"))?
+                    .file_descriptors
+            }
+        };
         Self::from_file_protos(file_protos)
     }
 
@@ -725,6 +758,10 @@ mod tests {
             r#"
             local proto = [[
             syntax = "proto3";
+            import "google/protobuf/any.proto";
+            import "google/protobuf/duration.proto";
+            import "google/protobuf/timestamp.proto";
+            import "google/protobuf/wrappers.proto";
             package demo;
 
             enum State {
@@ -743,6 +780,16 @@ mod tests {
                 string email = 7;
                 string phone = 8;
               }
+            }
+
+            message Envelope {
+              .google.protobuf.Any payload = 1;
+            }
+
+            message Meta {
+              .google.protobuf.Timestamp created_at = 1;
+              .google.protobuf.Duration ttl = 2;
+              .google.protobuf.Int64Value score = 3;
             }
             ]]
 
@@ -767,6 +814,25 @@ mod tests {
             local custom_name, custom_packed = pool:unpack_any(custom_any)
             assert(custom_name == "demo.Player")
             assert(custom_packed.id == "43")
+
+            local envelope_bytes = pool:encode("demo.Envelope", {
+                payload = any,
+            })
+            local envelope = pool:decode("demo.Envelope", envelope_bytes)
+            local envelope_name, envelope_player = pool:unpack_any(envelope.payload)
+            assert(envelope_name == "demo.Player")
+            assert(envelope_player.name == "packed")
+
+            local meta_bytes = pool:encode("demo.Meta", {
+                created_at = { seconds = "1700000000", nanos = 123 },
+                ttl = { seconds = "60", nanos = 0 },
+                score = { value = "9007199254740993" },
+            })
+            local meta = pool:decode("demo.Meta", meta_bytes)
+            assert(meta.created_at.seconds == "1700000000")
+            assert(meta.created_at.nanos == 123)
+            assert(meta.ttl.seconds == "60")
+            assert(meta.score.value == "9007199254740993")
 
             local empty_bytes = pool:encode("demo.Player", {})
             local sparse = pool:decode("demo.Player", empty_bytes)

@@ -117,6 +117,11 @@ local type_name, player = pool:unpack_any(any)
 print(type_name, player.id)
 ```
 
+当 pure Rust parser 无法解析 well-known type import 时，会自动 fallback 到
+内置的 `protoc`。因此运行时加载包含 `google/protobuf/any.proto`、
+`timestamp.proto`、`duration.proto`、`wrappers.proto` 等 import 的 schema
+不需要依赖系统安装的 `protoc`。
+
 如果只想校验 table 而不关心编码后的二进制，可以使用 `validate`：
 
 ```lua

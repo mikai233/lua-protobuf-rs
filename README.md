@@ -121,6 +121,11 @@ local type_name, player = pool:unpack_any(any)
 print(type_name, player.id)
 ```
 
+When the pure Rust parser cannot resolve well-known type imports, loading falls
+back to the bundled `protoc`. This keeps runtime-loaded schemas with imports
+like `google/protobuf/any.proto`, `timestamp.proto`, `duration.proto`, and
+`wrappers.proto` working without requiring a system `protoc`.
+
 Use `validate` when you want to check a table without keeping the encoded bytes:
 
 ```lua
