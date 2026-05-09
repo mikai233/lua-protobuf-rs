@@ -120,6 +120,9 @@ function LuaDynamicMessage:type_name() end
 ---@return LuaMessageSchema
 function LuaDynamicMessage:descriptor() end
 
+---@return LuaUnknownField[]
+function LuaDynamicMessage:unknown_fields() end
+
 ---@param field_name string
 ---@return boolean
 function LuaDynamicMessage:has(field_name) end
@@ -144,6 +147,9 @@ function LuaDynamicMessage:clear(field_name) end
 ---@param oneof_name string
 function LuaDynamicMessage:clear_oneof(oneof_name) end
 
+---@param number? integer
+function LuaDynamicMessage:clear_unknown_fields(number) end
+
 ---@param message table
 ---@param options? LuaProtoCodecOptions
 function LuaDynamicMessage:merge(message, options) end
@@ -158,6 +164,11 @@ function LuaDynamicMessage:validate() end
 
 ---@return string binary
 function LuaDynamicMessage:encode() end
+
+---@class LuaUnknownField
+---@field number integer
+---@field wire_type "varint"|"fixed32"|"fixed64"|"length_delimited"
+---@field value string|integer
 
 ---@class LuaFileSchema
 ---@field kind "file"

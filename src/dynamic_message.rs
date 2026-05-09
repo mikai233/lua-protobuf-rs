@@ -1,8 +1,8 @@
 use anyhow::anyhow;
 use mlua::prelude::LuaUserData;
-use mlua::{Table, UserDataMethods, Value};
-use protobuf::MessageDyn;
+use mlua::{Integer, Lua, Table, UserDataMethods, Value};
 use protobuf::reflect::RuntimeFieldType;
+use protobuf::{MessageDyn, UnknownValueRef};
 
 use crate::codec::{CodecOptions, LuaProtoCodec, UnknownFieldMode};
 use crate::schema;
@@ -19,6 +19,34 @@ impl LuaDynamicMessage {
     fn codec_options(options: Option<Table>) -> mlua::Result<CodecOptions> {
         CodecOptions::from_lua_table(options).map_err(|e| anyhow!("{e:?}").into())
     }
+
+    fn unknown_value_to_table(
+        lua: &Lua,
+        number: u32,
+        value: UnknownValueRef,
+    ) -> mlua::Result<Table> {
+        let table = lua.create_table()?;
+        table.set("number", Integer::from(number))?;
+        match value {
+            UnknownValueRef::Fixed32(value) => {
+                table.set("wire_type", "fixed32")?;
+                table.set("value", Integer::from(value))?;
+            }
+            UnknownValueRef::Fixed64(value) => {
+                table.set("wire_type", "fixed64")?;
+                table.set("value", lua.create_string(value.to_string())?)?;
+            }
+            UnknownValueRef::Varint(value) => {
+                table.set("wire_type", "varint")?;
+                table.set("value", lua.create_string(value.to_string())?)?;
+            }
+            UnknownValueRef::LengthDelimited(value) => {
+                table.set("wire_type", "length_delimited")?;
+                table.set("value", lua.create_string(value)?)?;
+            }
+        }
+        Ok(table)
+    }
 }
 
 impl LuaUserData for LuaDynamicMessage {
@@ -29,6 +57,14 @@ impl LuaUserData for LuaDynamicMessage {
 
         methods.add_method("descriptor", |lua, this, ()| {
             schema::message_to_table(lua, &this.message.descriptor_dyn())
+        });
+
+        methods.add_method("unknown_fields", |lua, this, ()| {
+            let table = lua.create_table()?;
+            for (number, value) in this.message.unknown_fields_dyn() {
+                table.push(Self::unknown_value_to_table(lua, number, value)?)?;
+            }
+            Ok(table)
         });
 
         methods.add_method("has", |_, this, field_name: String| {
@@ -231,6 +267,14 @@ impl LuaUserData for LuaDynamicMessage {
                 Ok(())
             },
         );
+
+        methods.add_method_mut("clear_unknown_fields", |_, this, number: Option<u32>| {
+            match number {
+                Some(number) => this.message.mut_unknown_fields_dyn().remove(number),
+                None => this.message.mut_unknown_fields_dyn().clear(),
+            }
+            Ok(())
+        });
 
         methods.add_method_mut("clear", |_, this, field_name: Option<String>| {
             let Some(field_name) = field_name else {

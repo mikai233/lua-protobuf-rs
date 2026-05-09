@@ -154,10 +154,15 @@ print(msg:get("id"))
 print(msg:which_oneof("contact"))
 
 local ok, err = msg:validate()
+local unknown_fields = msg:unknown_fields()
 
 local bytes = msg:encode()
 local table_value = msg:to_table()
 ```
+
+从更新 schema 解析到的 unknown fields 会在 dynamic message 再次 encode 时保留。
+可以用 `msg:unknown_fields()` 检查，也可以用
+`msg:clear_unknown_fields(number?)` 在转发前丢弃它们。
 
 # proto 代码提示
 

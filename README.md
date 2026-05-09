@@ -158,10 +158,15 @@ print(msg:get("id"))
 print(msg:which_oneof("contact"))
 
 local ok, err = msg:validate()
+local unknown_fields = msg:unknown_fields()
 
 local bytes = msg:encode()
 local table_value = msg:to_table()
 ```
+
+Unknown fields parsed from newer schemas are preserved when a dynamic message is
+encoded again. Use `msg:unknown_fields()` for inspection and
+`msg:clear_unknown_fields(number?)` when forwarding should drop them.
 
 # Proto Code Hints
 

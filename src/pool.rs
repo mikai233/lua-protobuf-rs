@@ -895,6 +895,20 @@ mod tests {
             ]]
 
             local pool = pb.load_proto(proto)
+            local with_unknown = pool:decode_message("demo.Player", "\8\7\152\6\123")
+            local unknown_fields = with_unknown:unknown_fields()
+            assert(#unknown_fields == 1)
+            assert(unknown_fields[1].number == 99)
+            assert(unknown_fields[1].wire_type == "varint")
+            assert(unknown_fields[1].value == "123")
+            assert(with_unknown:get("id") == "7")
+
+            local preserved = pool:decode_message("demo.Player", with_unknown:encode())
+            assert(#preserved:unknown_fields() == 1)
+
+            with_unknown:clear_unknown_fields(99)
+            assert(#with_unknown:unknown_fields() == 0)
+
             local msg = pool:new("demo.Player", {
                 id = "123",
                 name = "mikai233",
