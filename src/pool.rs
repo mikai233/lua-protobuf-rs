@@ -286,15 +286,19 @@ impl LuaUserData for LuaProtoPool {
 
         methods.add_method("services", |lua, pool, ()| {
             let services = lua.create_table()?;
-            for descriptor in pool.service_descriptors.values() {
-                services.push(schema::service_to_table(lua, descriptor)?)?;
+            for (full_name, descriptor) in &pool.service_descriptors {
+                services.push(schema::service_to_table_with_full_name(
+                    lua, descriptor, full_name,
+                )?)?;
             }
             Ok(services)
         });
 
         methods.add_method("service", |lua, pool, name: String| {
             match pool.service_descriptors.get(&name) {
-                Some(descriptor) => Ok(Some(schema::service_to_table(lua, descriptor)?)),
+                Some(descriptor) => Ok(Some(schema::service_to_table_with_full_name(
+                    lua, descriptor, &name,
+                )?)),
                 None => Ok(None),
             }
         });
@@ -465,6 +469,10 @@ mod tests {
                 string phone = 8;
               }
             }
+
+            service PlayerService {
+              rpc Get(Player) returns (Player);
+            }
             ]]
 
             local pool = pb.load_proto(proto)
@@ -494,10 +502,36 @@ mod tests {
             assert(#desc.fields == 8)
             assert(desc.fields[1].name == "id")
             assert(desc.fields[1].type == "int64")
+            assert(desc.file == "temp.proto")
+            assert(desc.package == "demo")
+            assert(desc.fields_by_name.id.number == 1)
+            assert(desc.fields_by_json_name.id.name == "id")
+            assert(desc.fields_by_number[1].name == "id")
+            assert(desc.fields_by_name.attrs.resolved_type.kind == "map")
+            assert(desc.fields_by_name.attrs.resolved_type.key.kind == "string")
+            assert(desc.fields_by_name.attrs.resolved_type.value.kind == "int64")
+            assert(desc.fields_by_name.state.resolved_type.kind == "enum")
+            assert(desc.fields_by_name.state.resolved_type.full_name == "demo.State")
+            assert(desc.fields_by_name.email.oneof == "contact")
+            assert(desc.oneofs_by_name.contact.field_names[1] == "email")
+            assert(desc.oneofs_by_name.contact.fields_by_name.phone.number == 8)
 
             local state = pool:enum("demo.State")
+            assert(state.default_value.name == "UNKNOWN")
+            assert(state.values_by_name.ONLINE.number == 1)
+            assert(state.values_by_number[1].name == "ONLINE")
             assert(state.values[2].name == "ONLINE")
             assert(state.values[2].number == 1)
+
+            local service = pool:service("demo.PlayerService")
+            assert(service.full_name == "demo.PlayerService")
+            assert(service.methods_by_name.Get.input_type == "demo.Player")
+            assert(service.methods_by_name.Get.output.full_name == "demo.Player")
+
+            local file = pool:file("temp.proto")
+            assert(file.messages_by_name["demo.Player"].name == "Player")
+            assert(file.enums_by_name["demo.State"].name == "State")
+            assert(file.services_by_name["demo.PlayerService"].name == "PlayerService")
             "#,
         )
         .exec()?;

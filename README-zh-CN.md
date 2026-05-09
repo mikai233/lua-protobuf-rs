@@ -111,9 +111,15 @@ local bytes = pool:encode("com.mikai233.Player", message, {
 local desc = pool:message("com.mikai233.Player")
 
 print(desc.full_name)
+print(desc.fields_by_name.id.type)
 
 for _, field in ipairs(desc.fields) do
     print(field.name, field.number, field.type, field.cardinality)
+end
+
+local player_field = desc.fields_by_name.player
+if player_field and player_field.resolved_type.kind == "message" then
+    print(player_field.resolved_type.full_name)
 end
 ```
 
