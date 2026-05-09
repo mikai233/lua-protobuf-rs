@@ -1,8 +1,8 @@
----@class LoginRequest
----@field id number
----@field world_id number
-local LoginRequest = { }
+---@class com_mikai233_LoginRequest
+---@field id? string
+---@field world_id? string
+local com_mikai233_LoginRequest = { }
 
----@class LoginResponse
----@field player Player
-local LoginResponse = { }
+---@class com_mikai233_LoginResponse
+---@field player? com_mikai233_Player
+local com_mikai233_LoginResponse = { }

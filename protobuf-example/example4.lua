@@ -4,20 +4,19 @@
 --- DateTime: 2023/9/15 17:45
 ---
 
---- @type LuaProtoc
-local luaProtoc = require("lua_protobuf_rs")
+local pb = require("lua_protobuf_rs")
 
 local inspect = require("inspect")
 
-local protos = luaProtoc.list_protos({ "proto" })
+local protos = pb.list_protos({ "proto" })
 
-local protoc = luaProtoc.parse_files(protos, { "proto" })
+local pool = pb.load({ files = protos, includes = { "proto" } })
 
 -- one_of_b和one_of_c同时设置时，只会有一个生效，并且因为lua迭代的不确定性，生效的字段随机
 local test = { a = { a = 0, b = "", c = { [12] = { a = 11 }, [2324382] = { a = 22 } }, d = {} }, one_of_b = "hello", one_of_c = "world" }
 print(inspect.inspect(test))
 print("====")
 
-local test_bytes = protoc:encode("com.mikai233.TestMessage", test)
-test = protoc:decode("com.mikai233.TestMessage", test_bytes)
+local test_bytes = pool:encode("com.mikai233.TestMessage", test)
+test = pool:decode("com.mikai233.TestMessage", test_bytes)
 print(inspect.inspect(test))

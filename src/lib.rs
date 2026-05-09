@@ -7,20 +7,10 @@ use mlua::prelude::{LuaAnyUserData, LuaResult};
 use crate::pool::LuaProtoModule;
 
 pub mod codec;
-pub mod descriptor;
-pub mod descriptor_proto;
 mod dynamic_message;
-mod message_dyn;
-mod message_dyn_macros;
-mod message_full_macros;
-mod message_macros;
+mod gen_lua;
 pub mod pool;
-pub mod protoc;
-mod reflect_value_box;
-pub mod runtime_field_type;
-pub mod runtime_type;
 mod schema;
-mod syntax;
 
 #[cfg(feature = "module")]
 #[mlua::lua_module]

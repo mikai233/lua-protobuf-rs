@@ -1,169 +1,157 @@
 # lua-protobuf-rs
 
-此项目使用的是rust的[protobuf](https://github.com/stepancheg/rust-protobuf)实现，编写的可以在lua中解析protobuf的库
+此项目基于 Rust 的 [protobuf](https://github.com/stepancheg/rust-protobuf) 实现，为 Lua 提供运行时 Protobuf 支持。
 
-可以做到在运行时加载proto文件，将protobuf二进制数据解析成lua table、将lua table编码成二进制数据以及protobuf在lua下的反射功能
+核心目标是：**不需要把 `.proto` 编译成静态 Lua/Rust 文件**，Lua 可以在运行时加载 schema、查询反射信息，并进行 encode/decode。
 
-绑定的API可以到[这里](https://docs.rs/protobuf/latest/protobuf/)查看，几乎绑定了所有的API
+可以做到：
+
+- 运行时加载 `.proto` 文件、proto 字符串或 descriptor set
+- 将 Lua table 编码成 Protobuf 二进制字符串
+- 将 Protobuf 二进制字符串解码成 Lua table
+- 在 Lua 中查询 message、enum、service、field 等 schema 信息
+- 生成 LuaLS/EmmyLua 类型提示文件
 
 # 使用
 
-## lua里直接解析proto
+## 直接解析 proto 字符串
 
 ```lua
---- @type LuaProtoc
-local luaProtoc = require("lua_protobuf_rs")
+local pb = require("lua_protobuf_rs")
 
 ---@language "protobuf"
 local proto = [[
-syntax="proto3";
+syntax = "proto3";
 
-message Player{
+message Player {
   int64 id = 1;
   int64 world_id = 2;
   string nickname = 3;
   int32 exp = 4;
 }
 
-message LoginRequest{
-  int64 id = 1;
-  int64 world_id = 2;
-}
-
-message LoginResponse{
+message LoginResponse {
   Player player = 1;
 }
 ]]
 
-local protoc = luaProtoc.parse_proto(proto)
+local pool = pb.load_proto(proto)
 
-local player = {
-    id = 2347239423213,
-    world_id = 234872389,
+local player_bytes = pool:encode("Player", {
+    id = "2347239423213",
+    world_id = "234872389",
     nickname = "mikai233",
     exp = 22000,
-}
+})
 
-local player_bytes = protoc:encode("Player", player)
-local decode_player = protoc:decode("Player", player_bytes)
-print(decode_player.id)
-
-local login_response_bytes = protoc:encode("LoginResponse", {})
-local decode_login_response = protoc:decode("LoginResponse", login_response_bytes)
-print(decode_login_response.player.id)
+local player = pool:decode("Player", player_bytes)
+print(player.id)
 ```
 
-## lua里解析proto文件
-
-- player.proto
-
-```protobuf
-syntax = "proto3";
-
-package com.mikai233;
-
-message Player{
-  int64 id = 1;
-  int64 world_id = 2;
-  string nickname = 3;
-  int32 exp = 4;
-}
-```
-
-- login.proto
-
-```protobuf
-syntax = "proto3";
-import "player.proto";
-
-package com.mikai233;
-
-message LoginRequest{
-  int64 id = 1;
-  int64 world_id = 2;
-}
-
-message LoginResponse{
-  Player player = 1;
-}
-```
+## 解析 proto 文件
 
 ```lua
---- @type LuaProtoc
-local luaProtoc = require("lua_protobuf_rs")
+local pb = require("lua_protobuf_rs")
 
-local protos = luaProtoc.list_protos({ "proto" })
+local files = pb.list_protos({ "proto" })
+local pool = pb.load({
+    files = files,
+    includes = { "proto" },
+})
 
-local protoc = luaProtoc.parse_files(protos, { "proto" })
+local bytes = pool:encode("com.mikai233.LoginResponse", {
+    player = {
+        id = "2347239423213",
+        world_id = "234872389",
+        nickname = "mikai233",
+        exp = 22000,
+    },
+})
 
-local player = {
-    id = 2347239423213,
-    world_id = 234872389,
-    nickname = "mikai233",
-    exp = 22000,
-}
-
-local player_bytes = protoc:encode("com.mikai233.Player", player)
-local decode_player = protoc:decode("com.mikai233.Player", player_bytes)
-print(decode_player.id)
-
-local login_response_bytes = protoc:encode("com.mikai233.LoginResponse", {})
-local decode_login_response = protoc:decode("com.mikai233.LoginResponse", login_response_bytes)
-print(decode_login_response.player.id)
+local message = pool:decode("com.mikai233.LoginResponse", bytes)
+print(message.player.nickname)
 ```
 
-## 反射
-
-更多的反射API请查看文档
+也可以使用 descriptor set：
 
 ```lua
---- @type LuaProtoc
-local luaProtoc = require("lua_protobuf_rs")
+local pool = pb.load_descriptor_set("proto.pb")
+```
 
-local protos = luaProtoc.list_protos({ "proto" })
+# 编解码语义
 
-local protoc = luaProtoc.parse_files(protos, { "proto" })
+默认行为面向 Lua 运行时使用：
 
-local player_descriptor = protoc:message_descriptor_by_name("com.mikai233.Player")
+- 未设置的字段解码后为 `nil`，不会自动填默认值
+- `int64` / `uint64` 默认使用字符串，避免 Lua number 精度损失
+- `bytes` 使用 Lua binary string
+- enum 默认使用名字，例如 `"ONLINE"`
+- encode 遇到未知字段默认报错
 
-for _, field in pairs(player_descriptor:fields()) do
-    print("field name: " .. field:name() .. " number: " .. field:number())
-end
+可以通过选项调整：
 
-print("====")
+```lua
+local message = pool:decode("com.mikai233.Player", bytes, {
+    defaults = true,
+    int64 = "integer",
+    bytes = "table",
+    enum = "number",
+})
 
-local login_response_descriptor = protoc:message_descriptor_by_name("com.mikai233.LoginResponse")
+local bytes = pool:encode("com.mikai233.Player", message, {
+    unknown = "ignore",
+})
+```
 
-for _, field in pairs(login_response_descriptor:fields()) do
-    local rt = field:runtime_field_type()
-    if rt.singular then
-        local singular = rt.singular
-        print(singular.message:name())
-    end
+# 反射
+
+反射 API 返回普通 Lua table，而不是 Rust userdata wrapper：
+
+```lua
+local desc = pool:message("com.mikai233.Player")
+
+print(desc.full_name)
+
+for _, field in ipairs(desc.fields) do
+    print(field.name, field.number, field.type, field.cardinality)
 end
 ```
 
-## proto代码提示
-
-可以使用`gen_lua`
-来生成lua的proto模板文件，来获得更好的代码编写体验，本项目是基于[EmmyLua](https://github.com/EmmyLua/IntelliJ-EmmyLua)
-插件做的注解提示
+动态 message userdata 可用于按字段操作：
 
 ```lua
----@class LoginRequest
----@field id number
----@field world_id number
-local LoginRequest
+local msg = pool:new("com.mikai233.Player")
 
----@class LoginResponse
----@field player Player
-local LoginResponse
+msg:set("id", "2347239423213")
+msg:set("nickname", "mikai233")
+
+print(msg:has("nickname"))
+print(msg:get("id"))
+
+local bytes = msg:encode()
+local table_value = msg:to_table()
 ```
 
-# xLua插件集成
+# proto 代码提示
 
-设置环境变量 `LUA_LIB_NAME` `LUA_LIB`为xlua的头文件目录以及xlua的库名，然后重新编译此项目即可
-注意xlua的版本一定要和此项目的lua版本要对应
+使用 `gen_lua` 生成 LuaLS/EmmyLua 注解文件：
+
+```lua
+pool:gen_lua("proto")
+```
+
+示例输出：
+
+```lua
+---@class com_mikai233_LoginResponse
+---@field player? com_mikai233_Player
+local com_mikai233_LoginResponse = { }
+```
+
+# xLua 插件集成
+
+设置环境变量 `LUA_LIB_NAME`、`LUA_LIB` 为 xLua 的头文件目录以及 xLua 的库名，然后重新编译此项目即可。
+注意 xLua 的版本一定要和此项目的 Lua 版本对应。
 
 ```csharp
 [DllImport("lua_protobuf_rs", CallingConvention = CallingConvention.Cdecl)]
@@ -178,18 +166,13 @@ public static int LoadProtobufRs(System.IntPtr L)
 
 # 编译
 
-得益于Cargo，编译变得非常简单，只需要安装Rust，然后执行`cargo build --release`就可以得到当前平台的库文件
+```shell
+cargo build --release
+```
 
-对于不同的Lua版本，只需要修改`Cargo.toml`中的`default`字段重新编译即可
+对于不同的 Lua 版本，修改 `Cargo.toml` 中的 feature 后重新编译即可。
 
 ## 交叉编译
 
-如果需要编译到不同平台，可以使用[交叉编译](https://github.com/cross-rs/cross)，需要Docker，操作难度很小
-
-- 编译到Linux：`cross build --target x86_64-unknown-linux-gnu --release`
-- 编译到Android `cross build --target armv7-linux-androideabi --release`
-
-# 注意事项
-
-对于非`oneof`类型的字段，在将二进制消息解析成table时，如果该字段没有设置值，都会给一个默认值，而对于`oneof`类型的字段，如果都没有设置过值，
-那么这些字段都将不存在，也就是说`oneof`的所有字段只可能存在一个或者都不存在
+- 编译到 Linux：`cross build --target x86_64-unknown-linux-gnu --release`
+- 编译到 Android：`cross build --target armv7-linux-androideabi --release`
