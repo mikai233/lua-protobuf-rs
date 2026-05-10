@@ -2,179 +2,227 @@
 
 Available languages: [English](README.md) | [中文](README-zh-CN.md)
 
-This project provides a Lua library for parsing Protobuf, built on top of
-Rust’s [protobuf](https://github.com/stepancheg/rust-protobuf) implementation.
+This project provides runtime Protobuf support for Lua, built on top of Rust’s
+[protobuf](https://github.com/stepancheg/rust-protobuf) implementation.
 
-It allows you to:
+The goal is: **Lua can use Protobuf without generating static Lua or Rust files from `.proto` files**.
+Schemas can be loaded at runtime, reflected in Lua, and used for encode/decode.
 
-- Load `.proto` files at runtime
-- Parse Protobuf binary data into Lua tables
-- Encode Lua tables into Protobuf binary data
-- Use Protobuf reflection features in Lua
+It supports:
 
-The bound APIs can be found [here](https://docs.rs/protobuf/latest/protobuf/), and almost all APIs are exposed.
-
----
+- Loading `.proto` files, inline proto strings, or descriptor sets at runtime
+- Encoding Lua tables into Protobuf binary strings
+- Decoding Protobuf binary strings into Lua tables
+- Querying message, enum, service, and field schema information in Lua
+- Generating LuaLS/EmmyLua type hint files
 
 # Usage
 
 ## Parse proto directly in Lua
 
 ```lua
---- @type LuaProtoc
-local luaProtoc = require("lua_protobuf_rs")
+local pb = require("lua_protobuf_rs")
 
 ---@language "protobuf"
 local proto = [[
-syntax="proto3";
+syntax = "proto3";
 
-message Player{
+message Player {
   int64 id = 1;
   int64 world_id = 2;
   string nickname = 3;
   int32 exp = 4;
 }
 
-message LoginRequest{
-  int64 id = 1;
-  int64 world_id = 2;
-}
-
-message LoginResponse{
+message LoginResponse {
   Player player = 1;
 }
 ]]
 
-local protoc = luaProtoc.parse_proto(proto)
+local pool = pb.load_proto(proto)
 
-local player = {
-    id = 2347239423213,
-    world_id = 234872389,
+local player_bytes = pool:encode("Player", {
+    id = "2347239423213",
+    world_id = "234872389",
     nickname = "mikai233",
     exp = 22000,
-}
+})
 
-local player_bytes = protoc:encode("Player", player)
-local decode_player = protoc:decode("Player", player_bytes)
-print(decode_player.id)
-
-local login_response_bytes = protoc:encode("LoginResponse", {})
-local decode_login_response = protoc:decode("LoginResponse", login_response_bytes)
-print(decode_login_response.player.id)
+local player = pool:decode("Player", player_bytes)
+print(player.id)
 ```
 
-# Parse proto files in Lua
-
-- player.proto
-
-```protobuf
-syntax = "proto3";
-
-package com.mikai233;
-
-message Player{
-  int64 id = 1;
-  int64 world_id = 2;
-  string nickname = 3;
-  int32 exp = 4;
-}
-```
-
-- login.proto
-
-```protobuf
-syntax = "proto3";
-import "player.proto";
-
-package com.mikai233;
-
-message LoginRequest{
-  int64 id = 1;
-  int64 world_id = 2;
-}
-
-message LoginResponse{
-  Player player = 1;
-}
-```
+## Parse proto files in Lua
 
 ```lua
---- @type LuaProtoc
-local luaProtoc = require("lua_protobuf_rs")
+local pb = require("lua_protobuf_rs")
 
-local protos = luaProtoc.list_protos({ "proto" })
+local files = pb.list_protos({ "proto" })
+local pool = pb.load({
+    files = files,
+    includes = { "proto" },
+})
 
-local protoc = luaProtoc.parse_files(protos, { "proto" })
+local bytes = pool:encode("com.mikai233.LoginResponse", {
+    player = {
+        id = "2347239423213",
+        world_id = "234872389",
+        nickname = "mikai233",
+        exp = 22000,
+    },
+})
 
-local player = {
-    id = 2347239423213,
-    world_id = 234872389,
-    nickname = "mikai233",
-    exp = 22000,
-}
+local message = pool:decode("com.mikai233.LoginResponse", bytes)
+print(message.player.nickname)
+```
 
-local player_bytes = protoc:encode("com.mikai233.Player", player)
-local decode_player = protoc:decode("com.mikai233.Player", player_bytes)
-print(decode_player.id)
+Descriptor sets are supported too:
 
-local login_response_bytes = protoc:encode("com.mikai233.LoginResponse", {})
-local decode_login_response = protoc:decode("com.mikai233.LoginResponse", login_response_bytes)
-print(decode_login_response.player.id)
+```lua
+local pool = pb.load_descriptor_set("proto.pb")
+```
+
+# Codec Semantics
+
+Default behavior is optimized for Lua runtime usage:
+
+- Unset fields decode to `nil`; defaults are not filled automatically
+- `int64` / `uint64` values use strings by default to avoid Lua number precision loss
+- `bytes` values use Lua binary strings
+- enums use names by default, for example `"ONLINE"`
+- unknown fields during encode are rejected by default
+- multiple fields from the same `oneof` in one encode input are rejected by default
+- proto2 `required` fields are validated recursively before writing bytes
+
+Options can override these defaults:
+
+```lua
+local message = pool:decode("com.mikai233.Player", bytes, {
+    defaults = true,
+    int64 = "integer",
+    bytes = "table",
+    enum = "number",
+})
+
+local bytes = pool:encode("com.mikai233.Player", message, {
+    unknown = "ignore",
+    oneof = "last",
+})
+```
+
+`google.protobuf.Any` can be packed and unpacked dynamically:
+
+```lua
+local any = pool:pack_any("com.mikai233.Player", {
+    id = "42",
+})
+
+local type_name, player = pool:unpack_any(any)
+print(type_name, player.id)
+```
+
+When the pure Rust parser cannot resolve well-known type imports, loading falls
+back to the bundled `protoc`. This keeps runtime-loaded schemas with imports
+like `google/protobuf/any.proto`, `timestamp.proto`, `duration.proto`, and
+`wrappers.proto` working without requiring a system `protoc`.
+
+Use `validate` when you want to check a table without keeping the encoded bytes:
+
+```lua
+local ok, err = pool:validate("com.mikai233.Player", {
+    attrs = { hp = {} },
+})
+
+if not ok then
+    print(err)
+    -- com.mikai233.Player.attrs["hp"]: value Table cannot be cast to int64
+end
 ```
 
 # Reflection
 
-For more reflection APIs, please refer to the documentation.
+Reflection APIs return plain Lua tables instead of Rust userdata wrappers:
 
 ```lua
---- @type LuaProtoc
-local luaProtoc = require("lua_protobuf_rs")
+local desc = pool:message("com.mikai233.Player")
 
-local protos = luaProtoc.list_protos({ "proto" })
+print(desc.full_name)
+print(desc.fields_by_name.id.type)
 
-local protoc = luaProtoc.parse_files(protos, { "proto" })
-
-local player_descriptor = protoc:message_descriptor_by_name("com.mikai233.Player")
-
-for _, field in pairs(player_descriptor:fields()) do
-    print("field name: " .. field:name() .. " number: " .. field:number())
+for _, field in ipairs(desc.fields) do
+    print(field.name, field.number, field.type, field.cardinality)
 end
 
-print("====")
-
-local login_response_descriptor = protoc:message_descriptor_by_name("com.mikai233.LoginResponse")
-
-for _, field in pairs(login_response_descriptor:fields()) do
-    local rt = field:runtime_field_type()
-    if rt.singular then
-        local singular = rt.singular
-        print(singular.message:name())
-    end
+local player_field = desc.fields_by_name.player
+if player_field and player_field.resolved_type.kind == "message" then
+    print(player_field.resolved_type.full_name)
 end
 ```
 
-# Proto code hints
-
-You can use `gen_lua` to generate Lua proto template files for better development experience.
-This project uses annotations based on the [EmmyLua](https://github.com/EmmyLua/IntelliJ-EmmyLua)
-plugin.
+Dynamic message userdata is available when field-by-field mutation is useful:
 
 ```lua
----@class LoginRequest
----@field id number
----@field world_id number
-local LoginRequest
+local msg = pool:new("com.mikai233.Player", {
+    id = "2347239423213",
+})
 
----@class LoginResponse
----@field player Player
-local LoginResponse
+msg:set("nickname", "mikai233")
+msg:merge({ email = "dev@example.com" })
+
+print(msg:has("nickname"))
+print(msg:get("id"))
+print(msg:which_oneof("contact"))
+
+local ok, err = msg:validate()
+local unknown_fields = msg:unknown_fields()
+
+local bytes = msg:encode()
+local table_value = msg:to_table()
 ```
 
-# xLua integration
+Unknown fields parsed from newer schemas are preserved when a dynamic message is
+encoded again. Use `msg:unknown_fields()` for inspection and
+`msg:clear_unknown_fields(number?)` when forwarding should drop them.
+
+# Proto Code Hints
+
+Use `gen_lua` to generate LuaLS/EmmyLua annotation files:
+
+```lua
+pool:gen_lua("proto")
+```
+
+Example output:
+
+```lua
+---@class com_mikai233_LoginResponse
+---@field player? com_mikai233_Player
+local com_mikai233_LoginResponse = { }
+```
+
+# Descriptor Export
+
+Runtime schemas can be exported and loaded again later:
+
+```lua
+pool:write_descriptor_set("proto.pb")
+local cached = pb.load_descriptor_set("proto.pb")
+
+pool:write_file_descriptors("proto-pb")
+local cached_files = pb.load_descriptor_set("proto-pb")
+```
+
+For in-memory use:
+
+```lua
+local descriptor_set_bytes = pool:descriptor_set()
+```
+
+# xLua Integration
 
 Set the environment variables `LUA_LIB_NAME` and `LUA_LIB` to point to the xLua header directory and library name, then
 recompile this project.
-⚠️ Make sure the xLua version matches the Lua version used in this project.
+Make sure the xLua version matches the Lua version used in this project.
 
 ```csharp
 [DllImport("lua_protobuf_rs", CallingConvention = CallingConvention.Cdecl)]
@@ -189,29 +237,13 @@ public static int LoadProtobufRs(System.IntPtr L)
 
 # Build
 
-Thanks to Cargo, building is very simple. Just install Rust, then run:
-
 ```shell
 cargo build --release
 ```
 
-to get the library file for the current platform.
+For different Lua versions, adjust the relevant Cargo features and rebuild.
 
-For different Lua versions, modify the `default` field in `Cargo.toml` and rebuild.
+# Cross-Compilation
 
-# Cross-compilation
-
-If you need to build for other platforms, you can use [cross-rs](https://github.com/cross-rs/cross) , which requires
-Docker but is very straightforward.
-
-- Build for Linux:
-  `cross build --target x86_64-unknown-linux-gnu --release`
-
-- Build for Android:
-  `cross build --target armv7-linux-androideabi --release`
-
-# Notes
-
-For non-`oneof` fields, when parsing binary messages into a Lua table, unset fields will get default values.
-For `oneof` fields, if no value is set, then *all fields will be absent*.
-That means: in a `oneof`, only one field can exist at a time, or none at all.
+- Build for Linux: `cross build --target x86_64-unknown-linux-gnu --release`
+- Build for Android: `cross build --target armv7-linux-androideabi --release`

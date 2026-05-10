@@ -30,7 +30,7 @@ luajit52 = ["mlua/luajit52"]
 luau = ["mlua/luau"]
 module = ["mlua/module"]
 google_protoc = []
-vendored_protoc = ["protoc-bin-vendored"]
+vendored_protoc = []
 
 [dependencies]
 mlua = { version = "0.11.6", features = ["macros", "anyhow"] }
@@ -39,5 +39,4 @@ walkdir = "2.5.0"
 tempfile = "3.27.0"
 protobuf = "3.7.2"
 protobuf-parse = "3.7.2"
-protoc-bin-vendored = { version = "3.1.0", optional = true }
-derive_more = { version = "2.1.1", features = ["deref", "deref_mut", "debug", "from", "into"] }
+protoc-bin-vendored = "3.1.0"

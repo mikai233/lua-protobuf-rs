@@ -4,26 +4,25 @@
 --- DateTime: 2023/9/15 14:31
 ---
 
---- @type LuaProtoc
-local luaProtoc = require("lua_protobuf_rs")
+local pb = require("lua_protobuf_rs")
 
-local protos = luaProtoc.list_protos({ "proto" })
+local protos = pb.list_protos({ "proto" })
 
-local protoc = luaProtoc.parse_files(protos, { "proto" })
+local pool = pb.load({ files = protos, includes = { "proto" } })
 
 local player = {
-    id = 2347239423213,
-    world_id = 234872389,
+    id = "2347239423213",
+    world_id = "234872389",
     nickname = "mikai233",
     exp = 22000,
 }
 
-local player_bytes = protoc:encode("com.mikai233.Player", player)
-local decode_player = protoc:decode("com.mikai233.Player", player_bytes)
+local player_bytes = pool:encode("com.mikai233.Player", player)
+local decode_player = pool:decode("com.mikai233.Player", player_bytes)
 print(decode_player.id)
 
-local login_response_bytes = protoc:encode("com.mikai233.LoginResponse", {})
-local decode_login_response = protoc:decode("com.mikai233.LoginResponse", login_response_bytes)
-print(decode_login_response.player.id)
+local login_response_bytes = pool:encode("com.mikai233.LoginResponse", { player = player })
+local decode_login_response = pool:decode("com.mikai233.LoginResponse", login_response_bytes)
+print(decode_login_response.player.nickname)
 
-protoc:gen_lua("proto")
+pool:gen_lua("proto")

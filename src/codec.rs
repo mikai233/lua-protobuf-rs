@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 
 use anyhow::{Context, anyhow};
@@ -9,6 +9,108 @@ use protobuf::reflect::{
     MessageDescriptor, ReflectValueBox, ReflectValueRef, RuntimeFieldType, RuntimeType,
 };
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Int64Mode {
+    String,
+    Integer,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum BytesMode {
+    String,
+    Table,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum EnumMode {
+    Name,
+    Number,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum UnknownFieldMode {
+    Error,
+    Ignore,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum OneofMode {
+    Error,
+    Last,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct CodecOptions {
+    pub defaults: bool,
+    pub int64: Int64Mode,
+    pub bytes: BytesMode,
+    pub enum_mode: EnumMode,
+    pub unknown_fields: UnknownFieldMode,
+    pub oneof: OneofMode,
+}
+
+impl Default for CodecOptions {
+    fn default() -> Self {
+        Self {
+            defaults: false,
+            int64: Int64Mode::String,
+            bytes: BytesMode::String,
+            enum_mode: EnumMode::Name,
+            unknown_fields: UnknownFieldMode::Error,
+            oneof: OneofMode::Error,
+        }
+    }
+}
+
+impl CodecOptions {
+    pub fn from_lua_table(table: Option<Table>) -> anyhow::Result<Self> {
+        let Some(table) = table else {
+            return Ok(Self::default());
+        };
+
+        let mut options = Self::default();
+        if let Some(defaults) = table.get::<Option<bool>>("defaults")? {
+            options.defaults = defaults;
+        }
+        if let Some(int64) = table.get::<Option<String>>("int64")? {
+            options.int64 = match int64.as_str() {
+                "string" => Int64Mode::String,
+                "integer" => Int64Mode::Integer,
+                _ => return Err(anyhow!("unknown int64 mode: {int64}")),
+            };
+        }
+        if let Some(bytes) = table.get::<Option<String>>("bytes")? {
+            options.bytes = match bytes.as_str() {
+                "string" => BytesMode::String,
+                "table" => BytesMode::Table,
+                _ => return Err(anyhow!("unknown bytes mode: {bytes}")),
+            };
+        }
+        if let Some(enum_mode) = table.get::<Option<String>>("enum")? {
+            options.enum_mode = match enum_mode.as_str() {
+                "name" => EnumMode::Name,
+                "number" => EnumMode::Number,
+                _ => return Err(anyhow!("unknown enum mode: {enum_mode}")),
+            };
+        }
+        if let Some(unknown) = table.get::<Option<String>>("unknown")? {
+            options.unknown_fields = match unknown.as_str() {
+                "error" => UnknownFieldMode::Error,
+                "ignore" => UnknownFieldMode::Ignore,
+                _ => return Err(anyhow!("unknown unknown-field mode: {unknown}")),
+            };
+        }
+        if let Some(oneof) = table.get::<Option<String>>("oneof")? {
+            options.oneof = match oneof.as_str() {
+                "error" => OneofMode::Error,
+                "last" => OneofMode::Last,
+                _ => return Err(anyhow!("unknown oneof mode: {oneof}")),
+            };
+        }
+        Ok(options)
+    }
+}
+
 #[derive(Copy, Clone, Default)]
 pub struct LuaProtoCodec;
 
@@ -17,99 +119,211 @@ impl LuaProtoCodec {
         &self,
         lua_message: &Table,
         descriptor: &MessageDescriptor,
+        options: CodecOptions,
     ) -> anyhow::Result<Box<dyn MessageDyn>> {
-        let name = descriptor.name();
+        self.encode_message_at(lua_message, descriptor, options, descriptor.full_name())
+    }
+
+    fn encode_message_at(
+        &self,
+        lua_message: &Table,
+        descriptor: &MessageDescriptor,
+        options: CodecOptions,
+        path: &str,
+    ) -> anyhow::Result<Box<dyn MessageDyn>> {
         let mut message = descriptor.new_instance();
+        self.merge_message_at(lua_message, message.as_mut(), descriptor, options, path)?;
+        Ok(message)
+    }
+
+    pub fn merge_message(
+        &self,
+        lua_message: &Table,
+        message: &mut dyn MessageDyn,
+        options: CodecOptions,
+    ) -> anyhow::Result<()> {
+        let descriptor = message.descriptor_dyn();
+        self.merge_message_at(
+            lua_message,
+            message,
+            &descriptor,
+            options,
+            descriptor.full_name(),
+        )
+    }
+
+    fn merge_message_at(
+        &self,
+        lua_message: &Table,
+        message: &mut dyn MessageDyn,
+        descriptor: &MessageDescriptor,
+        options: CodecOptions,
+        path: &str,
+    ) -> anyhow::Result<()> {
+        let name = descriptor.full_name();
+        let mut seen_oneofs = HashMap::<String, String>::new();
         for pair in lua_message.pairs::<Value, Value>() {
             let (field_key, field_value) = pair?;
             let field_key = field_key
                 .as_string()
-                .ok_or(anyhow!("message {} expect a string key", name))?
+                .ok_or(anyhow!("{} expects string field keys", path))?
                 .to_str()?
                 .to_string();
-            let field_descriptor = descriptor.field_by_name(&field_key).ok_or(anyhow!(
-                "field {} not found in message {}",
-                field_key,
-                name
-            ))?;
+            let field_path = format!("{path}.{field_key}");
+            let Some(field_descriptor) = descriptor.field_by_name_or_json_name(&field_key) else {
+                match options.unknown_fields {
+                    UnknownFieldMode::Error => {
+                        return Err(anyhow!(
+                            "{}: field not found in message {}",
+                            field_path,
+                            name
+                        ));
+                    }
+                    UnknownFieldMode::Ignore => continue,
+                }
+            };
+            if field_value.is_nil() {
+                field_descriptor.clear_field(message);
+                continue;
+            }
+            if let Some(oneof) = field_descriptor.containing_oneof() {
+                let oneof_name = oneof.name().to_string();
+                if let Some(previous_path) = seen_oneofs.get(&oneof_name)
+                    && options.oneof == OneofMode::Error
+                {
+                    return Err(anyhow!(
+                        "{}: oneof {} already set by {}",
+                        field_path,
+                        oneof_name,
+                        previous_path
+                    ));
+                }
+                seen_oneofs.insert(oneof_name, field_path.clone());
+            }
             match field_descriptor.runtime_field_type() {
                 RuntimeFieldType::Singular(ty) => {
-                    let boxed_value = self.box_value(name, &field_key, &ty, field_value)?;
-                    field_descriptor.set_singular_field(message.as_mut(), boxed_value);
+                    let boxed_value = self.box_value_at(&field_path, &ty, field_value, options)?;
+                    field_descriptor.set_singular_field(message, boxed_value);
                 }
                 RuntimeFieldType::Repeated(ty) => {
-                    let mut field_repeated = field_descriptor.mut_repeated(message.as_mut());
-                    let table = field_value.as_table().ok_or(anyhow!(
-                        "message {} field {} expect a table",
-                        name,
-                        field_key
-                    ))?;
-                    for v in table.sequence_values::<Value>() {
-                        let v = v?;
-                        let boxed_value = self.box_value(name, &field_key, &ty, v)?;
+                    let mut field_repeated = field_descriptor.mut_repeated(message);
+                    let table = field_value
+                        .as_table()
+                        .ok_or(anyhow!("{} expects a table", field_path,))?;
+                    for (index, v) in table.sequence_values::<Value>().enumerate() {
+                        let value_path = format!("{}[{}]", field_path, index + 1);
+                        let v = v.context(format!("{value_path}: invalid sequence value"))?;
+                        let boxed_value = self.box_value_at(&value_path, &ty, v, options)?;
                         field_repeated.push(boxed_value);
                     }
                 }
                 RuntimeFieldType::Map(k_ty, v_ty) => {
-                    let mut field_map = field_descriptor.mut_map(message.as_mut());
-                    let table = field_value.as_table().ok_or(anyhow!(
-                        "message {} field {} expect a table",
-                        name,
-                        field_key
-                    ))?;
+                    let mut field_map = field_descriptor.mut_map(message);
+                    let table = field_value
+                        .as_table()
+                        .ok_or(anyhow!("{} expects a table", field_path,))?;
                     for pair in table.pairs::<Value, Value>() {
                         let (key, value) = pair?;
-                        let key = self.box_value(name, &field_key, &k_ty, key)?;
-                        let value = self.box_value(name, &field_key, &v_ty, value)?;
+                        let key_label = Self::lua_key_label(&key);
+                        let key_path = format!("{field_path}[{key_label}]");
+                        let value_path = key_path.clone();
+                        let key = self.box_value_at(&key_path, &k_ty, key, options)?;
+                        let value = self.box_value_at(&value_path, &v_ty, value, options)?;
                         field_map.insert(key, value);
                     }
                 }
             }
         }
-        Ok(message)
+        Ok(())
     }
 
-    pub fn decode_message(&self, lua: &Lua, message: &dyn MessageDyn) -> anyhow::Result<Table> {
-        let lua_message = lua.create_table()?;
+    pub fn check_required_fields(&self, message: &dyn MessageDyn) -> anyhow::Result<()> {
+        Self::check_required_fields_at(message, message.descriptor_dyn().full_name())
+    }
+
+    fn check_required_fields_at(message: &dyn MessageDyn, path: &str) -> anyhow::Result<()> {
         let descriptor = message.descriptor_dyn();
-        let message_name = descriptor.name();
-        let mut oneof_field = HashSet::new();
-        for oneof_descriptor in descriptor.oneofs() {
-            for field in oneof_descriptor.fields() {
-                oneof_field.insert(field.name().to_string());
+        for field in descriptor.fields() {
+            let field_path = format!("{path}.{}", field.name());
+            if field.is_required() && !field.has_field(message) {
+                return Err(anyhow!("{}: required field is missing", field_path));
+            }
+            match field.runtime_field_type() {
+                RuntimeFieldType::Singular(_) => {
+                    if let Some(ReflectValueRef::Message(value)) = field.get_singular(message) {
+                        Self::check_required_fields_at(value.deref(), &field_path)?;
+                    }
+                }
+                RuntimeFieldType::Repeated(_) => {
+                    for (index, value) in field.get_repeated(message).into_iter().enumerate() {
+                        if let ReflectValueRef::Message(value) = value {
+                            let value_path = format!("{}[{}]", field_path, index + 1);
+                            Self::check_required_fields_at(value.deref(), &value_path)?;
+                        }
+                    }
+                }
+                RuntimeFieldType::Map(_, _) => {
+                    let map = field.get_map(message);
+                    for (key, value) in &map {
+                        if let ReflectValueRef::Message(value) = value {
+                            let value_path =
+                                format!("{}[{}]", field_path, Self::reflect_key_label(key));
+                            Self::check_required_fields_at(value.deref(), &value_path)?;
+                        }
+                    }
+                }
             }
         }
+        Ok(())
+    }
+
+    pub fn decode_message(
+        &self,
+        lua: &Lua,
+        message: &dyn MessageDyn,
+        options: CodecOptions,
+    ) -> anyhow::Result<Table> {
+        let lua_message = lua.create_table()?;
+        let descriptor = message.descriptor_dyn();
+        let message_name = descriptor.full_name();
+        let oneof_fields = Self::oneof_field_names(&descriptor);
+
         for field in descriptor.fields() {
             let field_name = field.name();
             match field.runtime_field_type() {
                 RuntimeFieldType::Singular(_) => {
-                    if oneof_field.contains(field_name) {
-                        if let Some(value) = field.get_singular(message) {
-                            let field_table =
-                                self.unbox_value(message_name, field_name, value, lua)?;
-                            lua_message.set(field_name, field_table)?;
-                        }
+                    let value = if oneof_fields.contains(field_name) || !options.defaults {
+                        field.get_singular(message)
                     } else {
-                        let value = field.get_singular_field_or_default(message);
-                        let field_table = self.unbox_value(message_name, field_name, value, lua)?;
+                        Some(field.get_singular_field_or_default(message))
+                    };
+                    if let Some(value) = value {
+                        let field_table =
+                            self.unbox_value(message_name, field_name, value, lua, options)?;
                         lua_message.set(field_name, field_table)?;
                     }
                 }
                 RuntimeFieldType::Repeated(_) => {
+                    if !options.defaults && !field.has_field(message) {
+                        continue;
+                    }
                     let field_table = lua.create_table()?;
                     let values = field.get_repeated(message);
                     for value in values {
-                        let v = self.unbox_value(message_name, field_name, value, lua)?;
+                        let v = self.unbox_value(message_name, field_name, value, lua, options)?;
                         field_table.push(v)?;
                     }
                     lua_message.set(field_name, field_table)?;
                 }
                 RuntimeFieldType::Map(_, _) => {
+                    if !options.defaults && !field.has_field(message) {
+                        continue;
+                    }
                     let field_table = lua.create_table()?;
                     let maps = field.get_map(message);
-                    for (k, v) in maps.into_iter() {
-                        let k = self.unbox_value(message_name, field_name, k, lua)?;
-                        let v = self.unbox_value(message_name, field_name, v, lua)?;
+                    for (k, v) in &maps {
+                        let k = self.unbox_value(message_name, field_name, k, lua, options)?;
+                        let v = self.unbox_value(message_name, field_name, v, lua, options)?;
                         field_table.set(k, v)?;
                     }
                     lua_message.set(field_name, field_table)?;
@@ -125,97 +339,131 @@ impl LuaProtoCodec {
         field: &str,
         ty: &RuntimeType,
         value: Value,
+        options: CodecOptions,
     ) -> anyhow::Result<ReflectValueBox> {
-        fn value_cast_error(message: &str, field: &str, value: &str, ty: &str) -> anyhow::Error {
-            anyhow!(
-                "message {} field {} value {} cannot be cast to {}",
-                message,
-                field,
-                value,
-                ty
-            )
+        self.box_value_at(&format!("{name}.{field}"), ty, value, options)
+    }
+
+    fn box_value_at(
+        &self,
+        path: &str,
+        ty: &RuntimeType,
+        value: Value,
+        options: CodecOptions,
+    ) -> anyhow::Result<ReflectValueBox> {
+        fn value_cast_error(path: &str, value: &str, ty: &str) -> anyhow::Error {
+            anyhow!("{}: value {} cannot be cast to {}", path, value, ty)
         }
+
         let value_ty = self.fmt_value(&value);
         let value_box = match ty {
             RuntimeType::I32 => {
                 let value = value
                     .as_i32()
-                    .ok_or(value_cast_error(name, field, value_ty, "i32"))?;
+                    .ok_or(value_cast_error(path, value_ty, "int32"))?;
                 ReflectValueBox::I32(value)
             }
             RuntimeType::I64 => {
-                let value = value
-                    .as_i64()
-                    .ok_or(value_cast_error(name, field, value_ty, "i64"))?;
+                let value =
+                    Self::lua_i64(value).ok_or(value_cast_error(path, value_ty, "int64"))?;
                 ReflectValueBox::I64(value)
             }
             RuntimeType::U32 => {
                 let value = value
                     .as_u32()
-                    .ok_or(value_cast_error(name, field, value_ty, "u32"))?;
+                    .ok_or(value_cast_error(path, value_ty, "uint32"))?;
                 ReflectValueBox::U32(value)
             }
             RuntimeType::U64 => {
-                let value = value
-                    .as_u64()
-                    .ok_or(value_cast_error(name, field, value_ty, "u64"))?;
+                let value =
+                    Self::lua_u64(value).ok_or(value_cast_error(path, value_ty, "uint64"))?;
                 ReflectValueBox::U64(value)
             }
             RuntimeType::F32 => {
                 let value = value
                     .as_f32()
-                    .ok_or(value_cast_error(name, field, value_ty, "f32"))?;
+                    .ok_or(value_cast_error(path, value_ty, "float"))?;
                 ReflectValueBox::F32(value)
             }
             RuntimeType::F64 => {
                 let value = value
                     .as_f64()
-                    .ok_or(value_cast_error(name, field, value_ty, "f64"))?;
+                    .ok_or(value_cast_error(path, value_ty, "double"))?;
                 ReflectValueBox::F64(value)
             }
             RuntimeType::Bool => {
                 let value = value
                     .as_boolean()
-                    .ok_or(value_cast_error(name, field, value_ty, "bool"))?;
+                    .ok_or(value_cast_error(path, value_ty, "bool"))?;
                 ReflectValueBox::Bool(value)
             }
             RuntimeType::String => {
                 let value = value
                     .as_string()
-                    .ok_or(value_cast_error(name, field, value_ty, "string"))?
+                    .ok_or(value_cast_error(path, value_ty, "string"))?
                     .to_str()?
                     .to_string();
-                ReflectValueBox::String(value.to_string())
+                ReflectValueBox::String(value)
             }
             RuntimeType::VecU8 => {
-                let table = value
-                    .as_table()
-                    .ok_or(value_cast_error(name, field, value_ty, "table"))?;
-                let len = table.len()?;
-                let mut bytes = Vec::with_capacity(len as usize);
-                for byte in table.sequence_values::<u8>() {
-                    let byte = anyhow::Context::context(
-                        byte,
-                        format!("message {} field {} expect u8 table", name, field),
-                    )?;
-                    bytes.push(byte);
-                }
+                let bytes = match options.bytes {
+                    BytesMode::String => value
+                        .as_string()
+                        .ok_or(value_cast_error(path, value_ty, "binary string"))?
+                        .as_bytes()
+                        .to_vec(),
+                    BytesMode::Table => {
+                        let table = value.as_table().ok_or(value_cast_error(
+                            path,
+                            value_ty,
+                            "byte table",
+                        ))?;
+                        let len = table.len()?;
+                        let mut bytes = Vec::with_capacity(len as usize);
+                        for (index, byte) in table.sequence_values::<u8>().enumerate() {
+                            let byte = anyhow::Context::context(
+                                byte,
+                                format!("{}[{}]: expected u8", path, index + 1),
+                            )?;
+                            bytes.push(byte);
+                        }
+                        bytes
+                    }
+                };
                 ReflectValueBox::Bytes(bytes)
             }
             RuntimeType::Enum(descriptor) => {
-                let value = value
-                    .as_i32()
-                    .ok_or(value_cast_error(name, field, value_ty, "i32"))?;
-                descriptor
-                    .value_by_number(value)
-                    .ok_or(anyhow!("incorrect number of enum {}", descriptor.name()))?;
+                let value = match value {
+                    Value::String(s) => {
+                        let name = s.to_str()?;
+                        descriptor
+                            .value_by_name(name.as_ref())
+                            .ok_or(anyhow!(
+                                "{}: unknown enum value {}.{}",
+                                path,
+                                descriptor.full_name(),
+                                name
+                            ))?
+                            .value()
+                    }
+                    value => value.as_i32().ok_or(value_cast_error(
+                        path,
+                        value_ty,
+                        "enum name or i32",
+                    ))?,
+                };
+                descriptor.value_by_number(value).ok_or(anyhow!(
+                    "{}: incorrect number of enum {}",
+                    path,
+                    descriptor.name()
+                ))?;
                 ReflectValueBox::Enum(descriptor.clone(), value)
             }
             RuntimeType::Message(descriptor) => {
                 let table = value
                     .as_table()
-                    .ok_or(value_cast_error(name, field, value_ty, "i32"))?;
-                let message = self.encode_message(table, descriptor)?;
+                    .ok_or(value_cast_error(path, value_ty, "table"))?;
+                let message = self.encode_message_at(table, descriptor, options, path)?;
                 ReflectValueBox::Message(message)
             }
         };
@@ -228,39 +476,78 @@ impl LuaProtoCodec {
         field_name: &str,
         value: ReflectValueRef,
         lua: &Lua,
+        options: CodecOptions,
     ) -> anyhow::Result<LuaValue> {
         let lua_value = match value {
             ReflectValueRef::U32(u) => Value::Integer(Integer::from(u)),
-            ReflectValueRef::U64(u) => {
-                let u = u32::try_from(u).context(format!(
-                    "message {} field {} cannot cast u64 value {} to u32",
-                    message_name, field_name, u
-                ))?;
-                Value::Integer(Integer::from(u))
-            }
+            ReflectValueRef::U64(u) => match options.int64 {
+                Int64Mode::String => Value::String(lua.create_string(u.to_string())?),
+                Int64Mode::Integer => {
+                    let u = i64::try_from(u).context(format!(
+                        "message {} field {} cannot cast u64 value {} to i64",
+                        message_name, field_name, u
+                    ))?;
+                    Value::Integer(Integer::from(u))
+                }
+            },
             ReflectValueRef::I32(i) => Value::Integer(Integer::from(i)),
-            ReflectValueRef::I64(i) => Value::Integer(Integer::from(i)),
+            ReflectValueRef::I64(i) => match options.int64 {
+                Int64Mode::String => Value::String(lua.create_string(i.to_string())?),
+                Int64Mode::Integer => Value::Integer(Integer::from(i)),
+            },
             ReflectValueRef::F32(f) => Value::Number(Number::from(f)),
             ReflectValueRef::F64(f) => Value::Number(Number::from(f)),
             ReflectValueRef::Bool(b) => Value::Boolean(b),
-            ReflectValueRef::String(s) => {
-                let lua_string = lua.create_string(s)?;
-                Value::String(lua_string)
-            }
-            ReflectValueRef::Bytes(bytes) => {
-                let table = lua.create_table()?;
-                for byte in bytes {
-                    table.push(*byte)?;
+            ReflectValueRef::String(s) => Value::String(lua.create_string(s)?),
+            ReflectValueRef::Bytes(bytes) => match options.bytes {
+                BytesMode::String => Value::String(lua.create_string(bytes)?),
+                BytesMode::Table => {
+                    let table = lua.create_table()?;
+                    for byte in bytes {
+                        table.push(*byte)?;
+                    }
+                    Value::Table(table)
                 }
-                Value::Table(table)
-            }
-            ReflectValueRef::Enum(_, i) => Value::Integer(Integer::from(i)),
+            },
+            ReflectValueRef::Enum(descriptor, i) => match options.enum_mode {
+                EnumMode::Name => match descriptor.value_by_number(i) {
+                    Some(value) => Value::String(lua.create_string(value.name())?),
+                    None => Value::Integer(Integer::from(i)),
+                },
+                EnumMode::Number => Value::Integer(Integer::from(i)),
+            },
             ReflectValueRef::Message(m) => {
-                let table = self.decode_message(lua, m.deref())?;
+                let table = self.decode_message(lua, m.deref(), options)?;
                 Value::Table(table)
             }
         };
         Ok(lua_value)
+    }
+
+    fn oneof_field_names(descriptor: &MessageDescriptor) -> HashSet<String> {
+        let mut oneof_field = HashSet::new();
+        for oneof_descriptor in descriptor.oneofs() {
+            for field in oneof_descriptor.fields() {
+                oneof_field.insert(field.name().to_string());
+            }
+        }
+        oneof_field
+    }
+
+    fn lua_i64(value: Value) -> Option<i64> {
+        match value {
+            Value::Integer(i) => Some(i),
+            Value::String(s) => s.to_str().ok()?.parse().ok(),
+            _ => None,
+        }
+    }
+
+    fn lua_u64(value: Value) -> Option<u64> {
+        match value {
+            Value::Integer(i) => u64::try_from(i).ok(),
+            Value::String(s) => s.to_str().ok()?.parse().ok(),
+            _ => None,
+        }
     }
 
     fn fmt_value(&self, value: &Value) -> &'static str {
@@ -281,6 +568,31 @@ impl LuaProtoCodec {
             #[cfg(any(feature = "luau", doc))]
             Value::Buffer(_) => "Buffer",
             Value::Other(_) => "Other",
+        }
+    }
+
+    fn lua_key_label(value: &Value) -> String {
+        match value {
+            Value::String(s) => match s.to_str() {
+                Ok(s) => format!("{s:?}"),
+                Err(_) => "\"<non-utf8>\"".to_string(),
+            },
+            Value::Integer(i) => i.to_string(),
+            Value::Number(n) => n.to_string(),
+            Value::Boolean(b) => b.to_string(),
+            _ => format!("<{}>", LuaProtoCodec.fmt_value(value)),
+        }
+    }
+
+    fn reflect_key_label(value: ReflectValueRef) -> String {
+        match value {
+            ReflectValueRef::String(s) => format!("{s:?}"),
+            ReflectValueRef::Bytes(bytes) => format!("{bytes:?}"),
+            ReflectValueRef::Enum(descriptor, number) => match descriptor.value_by_number(number) {
+                Some(value) => value.name().to_string(),
+                None => number.to_string(),
+            },
+            _ => value.to_string(),
         }
     }
 }

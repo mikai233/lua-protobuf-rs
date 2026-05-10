@@ -1,6 +1,6 @@
----@class Player
----@field id number
----@field world_id number
----@field nickname string
----@field exp number
-local Player = { }
+---@class com_mikai233_Player
+---@field id? string
+---@field world_id? string
+---@field nickname? string
+---@field exp? integer
+local com_mikai233_Player = { }
