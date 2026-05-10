@@ -188,15 +188,15 @@ impl LuaProtoCodec {
             }
             if let Some(oneof) = field_descriptor.containing_oneof() {
                 let oneof_name = oneof.name().to_string();
-                if let Some(previous_path) = seen_oneofs.get(&oneof_name) {
-                    if options.oneof == OneofMode::Error {
-                        return Err(anyhow!(
-                            "{}: oneof {} already set by {}",
-                            field_path,
-                            oneof_name,
-                            previous_path
-                        ));
-                    }
+                if let Some(previous_path) = seen_oneofs.get(&oneof_name)
+                    && options.oneof == OneofMode::Error
+                {
+                    return Err(anyhow!(
+                        "{}: oneof {} already set by {}",
+                        field_path,
+                        oneof_name,
+                        previous_path
+                    ));
                 }
                 seen_oneofs.insert(oneof_name, field_path.clone());
             }
